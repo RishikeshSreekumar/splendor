@@ -49,19 +49,19 @@ test('timeouts forfeit ranked games and become automatic fallback for remaining 
   const r = await simulate({
     bots: [looping, greedy],
     clockConfig: { initialMs: 50, incrementMs: 0 },
-    runnerOptions: { initializationMs: 20 },
   });
   assert.equal(r.result.reason, 'forfeit');
   assert.equal(r.log[0].kind === 'fault' ? r.log[0].code : '', 'TIMEOUT');
+  assert.equal(r.log[0].kind === 'fault' ? r.log[0].stage : '', 'decision');
   const p = await simulate({
     bots: [looping, greedy],
     mode: 'practice',
     maxTurns: 8,
     clockConfig: { initialMs: 50, incrementMs: 0 },
-    runnerOptions: { initializationMs: 20 },
   });
   assert.equal(p.decisions[0], 1);
   assert.equal(p.faults[0], 1);
+  assert.ok(p.log.every((event) => event.kind !== 'fault' || event.stage === 'decision'));
   assert.ok(p.assistedDecisions >= 4);
 });
 test('startup failures are attributed, and two failed bots do not create a rated match', async () => {
