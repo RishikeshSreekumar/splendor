@@ -1,0 +1,167 @@
+{
+  "rulesVersion": "splendor-base-1",
+  "decks": [
+    [
+      "c12",
+      "c01",
+      "c34",
+      "c05",
+      "c32",
+      "c29",
+      "c23",
+      "c21",
+      "c26",
+      "c08",
+      "c22",
+      "c38",
+      "c13",
+      "c33",
+      "c15",
+      "c14",
+      "c03",
+      "c40",
+      "c39",
+      "c07",
+      "c25",
+      "c18",
+      "c36",
+      "c11",
+      "c04",
+      "c19",
+      "c31",
+      "c06",
+      "c20",
+      "c28"
+    ],
+    [
+      "c67",
+      "c55",
+      "c41",
+      "c48",
+      "c64",
+      "c57",
+      "c54",
+      "c42",
+      "c59",
+      "c58",
+      "c60",
+      "c44",
+      "c66",
+      "c46",
+      "c62",
+      "c50",
+      "c51",
+      "c49",
+      "c63",
+      "c69",
+      "c68",
+      "c47",
+      "c43"
+    ],
+    ["c71", "c73", "c79", "c83", "c78", "c87", "c77", "c88", "c86", "c82", "c74", "c76"]
+  ],
+  "market": [
+    ["c35", "c27", "c30", "c10"],
+    ["c61", "c53", "c65", "c45"],
+    ["c80", "c81", "c75", "c85"]
+  ],
+  "nobles": ["n2-2", "n2-3", "n2-0", "n3-4"],
+  "bank": {
+    "white": 0,
+    "blue": 0,
+    "green": 0,
+    "red": 0,
+    "black": 0,
+    "gold": 5
+  },
+  "players": [
+    {
+      "tokens": {
+        "white": 3,
+        "blue": 3,
+        "green": 2,
+        "red": 1,
+        "black": 1,
+        "gold": 0
+      },
+      "cards": ["c17"],
+      "reserved": [
+        {
+          "cardId": "c70",
+          "public": true
+        },
+        {
+          "cardId": "c84",
+          "public": true
+        },
+        {
+          "cardId": "c16",
+          "public": true
+        }
+      ],
+      "nobles": [],
+      "turns": 9
+    },
+    {
+      "tokens": {
+        "white": 1,
+        "blue": 1,
+        "green": 1,
+        "red": 4,
+        "black": 1,
+        "gold": 0
+      },
+      "cards": ["c37", "c02"],
+      "reserved": [
+        {
+          "cardId": "c52",
+          "public": true
+        },
+        {
+          "cardId": "c89",
+          "public": false
+        },
+        {
+          "cardId": "c90",
+          "public": false
+        }
+      ],
+      "nobles": [],
+      "turns": 9
+    },
+    {
+      "tokens": {
+        "white": 1,
+        "blue": 1,
+        "green": 2,
+        "red": 0,
+        "black": 3,
+        "gold": 0
+      },
+      "cards": ["c09"],
+      "reserved": [
+        {
+          "cardId": "c56",
+          "public": false
+        },
+        {
+          "cardId": "c24",
+          "public": false
+        },
+        {
+          "cardId": "c72",
+          "public": false
+        }
+      ],
+      "nobles": [],
+      "turns": 8
+    }
+  ],
+  "currentPlayer": 2,
+  "phase": "main",
+  "turn": 26,
+  "decision": 27,
+  "finalRound": false,
+  "status": "playing",
+  "winners": []
+}

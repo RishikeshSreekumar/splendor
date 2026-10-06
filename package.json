@@ -1,0 +1,48 @@
+{
+  "name": "splendor-strategy-lab",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "dev": "npm run build:runtime && next dev --hostname 127.0.0.1",
+    "build": "npm run build:runtime && next build",
+    "start": "next start --hostname 127.0.0.1",
+    "build:runtime": "tsx scripts/build-runtime.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --max-warnings=0",
+    "test": "npm run build:runtime && tsx --test test/*.test.ts",
+    "check": "npm run typecheck && npm run lint && npm test",
+    "demo": "npm run build:runtime && tsx src/cli.ts",
+    "evaluate": "npm run build:runtime && tsx src/cli.ts",
+    "verify:data": "tsx scripts/verify-data.ts",
+    "format": "prettier --write app components src scripts test bots examples *.json *.mjs *.ts docs README.md",
+    "format:check": "prettier --check app components src scripts test bots examples *.json *.mjs *.ts docs README.md"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.117.2",
+    "lucide-react": "^1.49.0",
+    "modal": "^0.11.0",
+    "next": "^16.3.8",
+    "quickjs-emscripten": "0.32.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261001.1",
+    "@types/node": "^22.20.4",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "esbuild": "^0.28.2",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.3.8",
+    "mermaid": "^11.17.2",
+    "prettier": "^3.9.9",
+    "tsx": "^4.23.15",
+    "typescript": "^6.0.3",
+    "wrangler": "^4.146.0"
+  }
+}

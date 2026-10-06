@@ -1,0 +1,16 @@
+node_modules/
+results/
+.DS_Store
+.next/
+.runtime/
+storage/
+*.tsbuildinfo
+
+.env*
+!.env.example
+.dev.vars*
+.wrangler/
+.vercel/
+.vercel
+supabase/.temp/
+supabase/.branches/

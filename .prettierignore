@@ -1,0 +1,6 @@
+next-env.d.ts
+.next/
+.runtime/
+node_modules/
+storage/
+results/

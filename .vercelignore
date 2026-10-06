@@ -1,0 +1,8 @@
+node_modules
+.next
+storage
+results
+.env*
+.wrangler
+cloudflare/.wrangler
+*.tsbuildinfo

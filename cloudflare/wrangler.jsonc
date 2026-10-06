@@ -1,0 +1,10 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "splendor-artifacts",
+  "main": "worker.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "r2_buckets": [{ "binding": "ARTIFACTS", "bucket_name": "splendor-artifacts" }],
+  "observability": { "enabled": true },
+}
