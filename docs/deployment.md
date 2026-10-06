@@ -6,6 +6,8 @@ The application uses Vercel for Next.js, Modal's JavaScript SDK for game executi
 
 Copy `.env.example` to ignored `.env.local` and provide the server credentials. Only the Supabase URL and anon key are returned by `/api/config`; every other key remains server-only. Do not prefix service credentials with `NEXT_PUBLIC_`. `PLATFORM_TOKEN` must match the R2 gateway's Worker secret. `CRON_SECRET` protects the recovery endpoint. `APP_ORIGIN` must be the browser-facing origin. `BOT_SECRETS_KEY` is a 32-byte key encoded as 64 hex characters for AES-256-GCM. Preserve it across deployments; rotation requires decrypting/re-encrypting existing bot keys. Apply migration 0004 before deploying the networking release.
 
+**Multi-bot practice release order:** (1) apply `202610070001_practice_seats.sql`; (2) run `scripts/seed-cloud.ts` to add the Strategist baseline; (3) rebuild the Modal image and commit `modal-image.json`, because the practice runner protocol changed; (4) deploy the web app. The new runner still accepts the old single-opponent payload, and sessions created before the migration keep playing Greedy.
+
 Apply the SQL files in `supabase/migrations` in order. The tables have RLS enabled and no direct browser grants. Backend routes verify user tokens with Supabase and enforce ownership. RPCs reserve account quotas under a transaction advisory lock. Seed public versions with:
 
 ```sh

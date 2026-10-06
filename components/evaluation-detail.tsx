@@ -5,7 +5,7 @@ import { ArrowLeft, ChevronLeft, ChevronRight, Download, Trophy } from 'lucide-r
 import type { EvaluationJob, StoredBot } from '@/src/server/store';
 import type { GameEvent, GameRecord, Observation } from '@/src/types';
 import { api, actionLabel, ErrorNotice, errorMessage } from './ui';
-import { Board } from './board';
+import { GameTable } from './table/game-table';
 interface ReplayData {
   game: GameRecord;
   frames: { view: Observation; event: GameEvent | null }[];
@@ -225,7 +225,11 @@ export function EvaluationDetail({ id }: { id: string }) {
                       : `${replay.names[current.event.seat]}: ${current.event.code}`
                     : 'The opening position. Each player starts with a fresh clock.'}
                 </div>
-                <Board view={current.view} names={replay.names} />
+                <GameTable
+                  view={current.view}
+                  seats={replay.names.map((name) => ({ name, kind: 'bot' as const }))}
+                  actingSeat={current.event?.seat ?? null}
+                />
               </>
             )}
           </section>

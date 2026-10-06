@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Shell } from '@/components/shell';
 import './globals.css';
+import './table.css';
 export const metadata: Metadata = {
   title: 'Splendor Lab · Strategy, tested.',
   description:

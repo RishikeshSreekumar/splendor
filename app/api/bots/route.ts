@@ -2,6 +2,7 @@ import { botSecretsSchema } from '@/src/server/bot-secrets';
 import { z } from 'zod';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { getStore } from '@/src/server/store';
+import { QUALIFICATION_BASELINES } from '@/src/server/baselines';
 import { bundleProject, projectSchema } from '@/src/submissions/bundle';
 import { isCloud, authenticatedOwner, optionalOwner, database } from '@/src/server/cloud';
 import { CloudStore } from '@/src/server/cloud-store';
@@ -59,18 +60,18 @@ export async function POST(request: Request) {
     }
     if (Object.keys(secrets).length) throw new Error('Private bot credentials require hosted mode');
     // Local checks use the same game protocol; only Modal provides the machine memory boundary.
-    const publicBots = [
-      ...new Map(
-        getStore()
-          .listBots()
-          .filter((b) => b.baseline)
-          .map((b) => [b.name, b]),
-      ).values(),
-    ];
+    const baselines = getStore()
+      .listBots()
+      .filter((b) => b.baseline);
+    const publicBots = QUALIFICATION_BASELINES.map((name) => {
+      const bot = baselines.find((b) => b.name === name);
+      if (!bot) throw new Error(`${name} baseline is missing`);
+      return bot;
+    });
     const report = await evaluate({
       bots: [
         { id: 'candidate', source: artifact.source },
-        ...publicBots.slice(0, 2).map((b) => ({ id: b.id, source: b.source })),
+        ...publicBots.map((b) => ({ id: b.id, source: b.source })),
       ],
       pairs: 1,
       runnerOptions: { memoryMb: 64 },

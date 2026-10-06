@@ -23,7 +23,7 @@ npm start           # production Next.js server on loopback
 The application contains:
 
 - **Evaluation arena:** choose 2–6 saved bot versions, configure clocks and paired fixtures, and compare against public and submitted bots.
-- **Practice table:** play untimed against Greedy, which has its own 60 + 1 clock. Legal actions, token returns, and noble choices use the same authoritative rules engine.
+- **Practice table:** a Board Game Arena–style table. Click gems, cards, decks and nobles to play untimed against one to three bots (Random, Greedy, the stronger Strategist, or your own qualified bots), each on its own 60 + 1 clock. Bot turns animate one by one with a game log; every click is checked against the authoritative rules engine.
 - **Bot workshop:** write/import a module or upload a folder, inspect public bot source, and qualify an immutable version in four games against public baselines.
 - **Evaluation reports:** persisted cohort Elo, faults, assistance counts, and verified move-by-move replay with each bot's recorded clock.
 - **System design:** eight rendered architecture/UML views, also maintained as Mermaid source in [docs/architecture.md](docs/architecture.md).
@@ -106,7 +106,7 @@ See `examples/llm-player.ts` for a Chat Completions-style template. Replace its 
 | Turn cap or no legal action                                | Explicit incomplete result                                                 | Unrated paired fixture               |
 | Internal engine failure                                    | Fail the job                                                               | Fail the job, never penalize the bot |
 
-The simulator's fallback is seeded random legal play. The human practice table uses its first legal action if Greedy fails. Both paths mark assistance and withhold increments for assisted turns. Practice never changes ratings.
+The simulator's fallback is seeded random legal play. The human practice table uses the first legal action for any bot that fails, for the rest of that game. Both paths mark assistance and withhold increments for assisted turns. Practice never changes ratings.
 
 Every pair of opponents plays two independently seeded deals with swapped seats. Fresh deals prevent networked bots reusing hidden cards learned in the previous game. Legacy reports retain their original repeated-deal policy. Elo uses the average score across the two games and K=32 per complete fixture; unfinished halves never produce a rating update. Rows remain provisional below 30 rated games. Use many independent seeds and diverse opponents; a small cohort is not an absolute skill measurement.
 

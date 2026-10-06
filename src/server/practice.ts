@@ -1,109 +1,90 @@
 import { randomUUID, randomBytes } from 'node:crypto';
-import { BotRunner, BotFault } from '../sandbox';
+import { BotRunner } from '../sandbox';
 import { ChessClock, DEFAULT_CLOCK } from '../clock';
+import { createGame, observe } from '../engine';
+import { humanStep, playBots } from '../practice/bot-turns';
 import {
-  createGame,
-  applyAction,
-  legalActions,
-  observe,
-  assertInvariants,
-  InvalidAction,
-} from '../engine';
-import { getStore } from './store';
-import type { ClockConfig, GameState, Observation } from '../types';
-export interface PracticeView {
-  id: string;
-  view: Observation;
-  notices: string[];
-  revision: number;
-}
+  arrangeSeats,
+  chooseHumanSeat,
+  type PracticeOptions,
+  type PracticeSeat,
+  type PracticeStep,
+  type PracticeView,
+} from '../practice/types';
+import { getStore, type StoredBot } from './store';
+import type { ClockConfig, GameState } from '../types';
+export type { PracticeView } from '../practice/types';
+/** An in-memory table for local mode: one human seat and 1–3 sandboxed bots. */
 export class PracticeSession {
   readonly id = randomUUID();
+  readonly seats: PracticeSeat[];
+  readonly humanSeat: number;
   private state: GameState;
-  private runner: BotRunner;
+  private drivers: (BotRunner | null)[];
   private clock: ChessClock;
-  private disabled = false;
+  private disabled = new Set<number>();
   private busy = false;
-  private notices: string[] = [];
   touchedAt = Date.now();
-  constructor(config: ClockConfig = DEFAULT_CLOCK) {
-    const seed = randomBytes(32).toString('hex');
-    this.state = createGame({ seed });
-    const baseline = getStore()
-      .listBots()
-      .find((b) => b.baseline && b.name === 'Greedy')!;
-    this.runner = new BotRunner(baseline.source, { seed: `${seed}:bot` });
-    this.clock = new ChessClock(2, config);
+  constructor(opponents: StoredBot[], options: PracticeOptions, config: ClockConfig) {
+    const seed = randomBytes(32).toString('hex'),
+      players = opponents.length + 1;
+    this.humanSeat = chooseHumanSeat(options.order, players);
+    this.seats = arrangeSeats(this.humanSeat, opponents);
+    this.state = createGame({ players, seed });
+    this.clock = new ChessClock(players, config);
+    let next = 0;
+    this.drivers = this.seats.map((s) =>
+      s.kind === 'human'
+        ? null
+        : new BotRunner(opponents[next++].source, { seed: `${seed}:bot:${next}` }),
+    );
   }
-  async initialize(): Promise<void> {
-    await this.runner.ready;
+  /** Starts every bot and plays their opening turns when the human does not sit first. */
+  async initialize(): Promise<PracticeView> {
+    await Promise.all(this.drivers.map((d) => d?.ready));
+    return this.advance([]);
   }
-  snapshot(): PracticeView {
+  private view(steps: PracticeStep[], notices: string[]): PracticeView {
     return {
       id: this.id,
-      view: { ...observe(this.state, 0), clock: this.clock.snapshot() },
-      notices: this.notices,
       revision: this.state.decision,
+      humanSeat: this.humanSeat,
+      seats: this.seats,
+      view: { ...observe(this.state, this.humanSeat), clock: this.clock.snapshot() },
+      steps,
+      notices,
     };
+  }
+  private async advance(steps: PracticeStep[]): Promise<PracticeView> {
+    const result = await playBots({
+      state: this.state,
+      clock: this.clock,
+      humanSeat: this.humanSeat,
+      drivers: this.drivers,
+      disabled: this.disabled,
+    });
+    this.state = result.state;
+    if (this.state.status === 'finished') await this.close();
+    return this.view([...steps, ...result.steps], result.notices);
   }
   async act(action: unknown, revision: number): Promise<PracticeView> {
     if (this.busy || revision !== this.state.decision)
       throw new Error('The board changed; refresh and try again.');
-    if (this.state.currentPlayer !== 0) throw new Error('Wait for your turn');
     this.busy = true;
     this.touchedAt = Date.now();
-    this.notices = [];
     try {
-      this.state = applyAction(this.state, action);
-      await this.runner.ready;
-      let assistedTurn = false;
-      while (this.state.status === 'playing' && this.state.currentPlayer === 1) {
-        const actions = legalActions(this.state);
-        if (!actions.length) {
-          this.notices.push('The bot has no legal action. This practice session is incomplete.');
-          break;
-        }
-        const oldTurn = this.state.turn;
-        let next: GameState | undefined;
-        if (!this.disabled) {
-          const view = observe(this.state),
-            budget = this.clock.beginDecision(1);
-          try {
-            const candidate = await this.runner.chooseAction(
-              { ...view, clock: this.clock.snapshot() },
-              budget,
-            );
-            const charge = this.clock.endDecision(1);
-            if (charge.expired) throw new BotFault('TIMEOUT');
-            next = applyAction(this.state, candidate);
-          } catch (error) {
-            if (!(error instanceof BotFault) && !(error instanceof InvalidAction)) throw error;
-            if (this.clock.snapshot().activeSeat !== null) this.clock.endDecision(1);
-            this.disabled = true;
-            this.notices.push(
-              'The bot could not complete its decision. Legal fallback is active for this practice game.',
-            );
-          }
-        }
-        if (!next) {
-          next = applyAction(this.state, actions[0]);
-          assistedTurn = true;
-        }
-        if (next.turn > oldTurn) {
-          this.clock.completeTurn(1, oldTurn, assistedTurn);
-          assistedTurn = false;
-        }
-        this.state = next;
-        assertInvariants(this.state);
-      }
-      if (this.state.status === 'finished') await this.close();
-      return this.snapshot();
+      const { state, step } = humanStep(
+        { state: this.state, clock: this.clock, humanSeat: this.humanSeat },
+        action,
+      );
+      this.state = state;
+      return await this.advance([step]);
     } finally {
       this.busy = false;
     }
   }
-  close(): Promise<void> {
-    return this.runner.close();
+  async close(): Promise<void> {
+    await Promise.all(this.drivers.map((d) => d?.close()));
   }
 }
 const globals = globalThis as typeof globalThis & {
@@ -112,7 +93,19 @@ const globals = globalThis as typeof globalThis & {
 export function practiceSessions(): Map<string, PracticeSession> {
   return (globals.splendorPractice ??= new Map());
 }
-export async function createPractice(config: ClockConfig): Promise<PracticeSession> {
+/** Resolves requested opponents against saved bots; unknown IDs are rejected. */
+export function practiceOpponents(ids: string[]): StoredBot[] {
+  const bots = getStore().listBots();
+  return ids.map((id) => {
+    const bot = bots.find((b) => b.id === id);
+    if (!bot) throw new Error('Unknown opponent bot');
+    return bot;
+  });
+}
+export async function createPractice(
+  options: PracticeOptions,
+  config: ClockConfig = DEFAULT_CLOCK,
+): Promise<{ session: PracticeSession; view: PracticeView }> {
   const sessions = practiceSessions();
   for (const [id, s] of sessions)
     if (Date.now() - s.touchedAt > 3600000) {
@@ -121,11 +114,11 @@ export async function createPractice(config: ClockConfig): Promise<PracticeSessi
     }
   if (sessions.size >= 20)
     throw new Error('Too many practice sessions. Close an existing board first.');
-  const session = new PracticeSession(config);
+  const session = new PracticeSession(practiceOpponents(options.opponents), options, config);
   try {
-    await session.initialize();
+    const view = await session.initialize();
     sessions.set(session.id, session);
-    return session;
+    return { session, view };
   } catch (error) {
     await session.close();
     throw error;

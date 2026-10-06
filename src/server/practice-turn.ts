@@ -1,49 +1,53 @@
-import { applyAction, observe, legalActions, InvalidAction } from '../engine';
 import { ChessClock } from '../clock';
-import { BotRunner, BotFault } from '../sandbox';
+import { BotRunner } from '../sandbox';
+import { humanStep, playBots } from '../practice/bot-turns';
+import type { PracticeStep } from '../practice/types';
 import type { GameState, ClockSnapshot } from '../types';
-export async function practiceTurn(input: {
+export interface PracticeTurnInput {
   state: GameState;
   clock: ClockSnapshot;
+  /** null advances bots without a human move, e.g. when the human does not sit first. */
   action: unknown;
-  source: string;
-}) {
-  let state = applyAction(input.state, input.action);
+  humanSeat?: number;
+  /** Bot code per seat; null at the human seat. */
+  seats?: ({ source: string; secrets?: Record<string, string> } | null)[];
+  /** Legacy two-seat payload: the human at seat 0 against this source. */
+  source?: string;
+}
+/** Runs inside a Modal sandbox: applies one human move, then every bot reply. */
+export async function practiceTurn(input: PracticeTurnInput) {
+  const humanSeat = input.humanSeat ?? 0;
+  const seats = input.seats ?? [null, { source: input.source ?? '' }];
   const clock = ChessClock.restore(input.clock);
-  const notices: string[] = [];
-  if (state.status === 'finished' || state.currentPlayer === 0)
-    return { state, clock: clock.snapshot(), notices };
-  const runner = new BotRunner(input.source, {
-    memoryMb: 64,
-    startupMs: 15000,
-    seed: `practice-${state.turn}`,
-  });
-  let assisted = false;
-  try {
-    await runner.ready;
-    while (state.status === 'playing' && state.currentPlayer === 1) {
-      const before = state.turn;
-      const view = observe(state);
-      try {
-        if (clock.getRemaining(1) <= 0) throw new BotFault('TIMEOUT');
-        const budget = clock.beginDecision(1);
-        const action = await runner.chooseAction({ ...view, clock: clock.snapshot() }, budget);
-        const charge = clock.endDecision(1);
-        if (charge.expired) throw new BotFault('TIMEOUT');
-        state = applyAction(state, action);
-      } catch (error) {
-        if (!(error instanceof BotFault) && !(error instanceof InvalidAction)) throw error;
-        if (clock.snapshot().activeSeat !== null) clock.endDecision(1);
-        const fallback = legalActions(state)[0];
-        if (!fallback) throw new Error('No legal action');
-        state = applyAction(state, fallback);
-        assisted = true;
-        notices.push('Greedy required a legal fallback; no increment awarded.');
-      }
-      if (state.turn > before) clock.completeTurn(1, before, assisted);
-    }
-  } finally {
-    await runner.close();
+  let state = input.state;
+  const steps: PracticeStep[] = [];
+  if (input.action !== null) {
+    const human = humanStep({ state, clock, humanSeat }, input.action);
+    state = human.state;
+    steps.push(human.step);
   }
-  return { state, clock: clock.snapshot(), notices };
+  if (state.status === 'finished' || state.currentPlayer === humanSeat)
+    return { state, clock: clock.snapshot(), steps, notices: [] };
+  const drivers = seats.map((s, seat) =>
+    s && seat !== humanSeat
+      ? new BotRunner(
+          s.source,
+          { memoryMb: 64, startupMs: 15000, seed: `practice-${seat}-${state.turn}` },
+          s.secrets,
+        )
+      : null,
+  );
+  try {
+    const disabled = new Set<number>();
+    await Promise.all(drivers.map((d, seat) => d?.ready.catch(() => void disabled.add(seat))));
+    const result = await playBots({ state, clock, humanSeat, drivers, disabled });
+    return {
+      state: result.state,
+      clock: clock.snapshot(),
+      steps: [...steps, ...result.steps],
+      notices: result.notices,
+    };
+  } finally {
+    await Promise.all(drivers.map((d) => d?.close()));
+  }
 }

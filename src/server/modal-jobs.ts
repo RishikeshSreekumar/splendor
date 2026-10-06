@@ -4,6 +4,7 @@ import { randomBytes } from 'node:crypto';
 import { database, getArtifact, putArtifact, secret } from './cloud';
 import type { BotArtifact } from './cloud-store';
 import type { BotDefinition, ClockConfig, EvaluationReport, Mode } from '../types';
+import { QUALIFICATION_BASELINES } from './baselines';
 import imageConfig from '../../modal-image.json';
 export interface RunInput {
   bots: BotDefinition[];
@@ -70,12 +71,14 @@ export async function launchQualification(botId: string) {
     .select('*')
     .eq('baseline', true)
     .eq('qualification', 'passed')
+    .in('name', [...QUALIFICATION_BASELINES])
     .order('created_at', { ascending: false });
   if (be) throw be;
   const selected = (baselines ?? [])
     .filter((b, i, all) => all.findIndex((v) => v.name === b.name) === i)
-    .slice(0, 2);
-  if (selected.length !== 2) throw new Error('Two public baselines must be seeded first');
+    .slice(0, QUALIFICATION_BASELINES.length);
+  if (selected.length !== QUALIFICATION_BASELINES.length)
+    throw new Error('Random and Greedy baselines must be seeded first');
   const bots: BotDefinition[] = [];
   for (const b of [bot, ...selected]) {
     const a = await getArtifact<BotArtifact>(b.artifact_key);

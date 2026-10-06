@@ -2,10 +2,11 @@ import { randomUUID, createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { bundleProject } from '../src/submissions/bundle';
 import { database, putArtifact } from '../src/server/cloud';
+import { BASELINES } from '../src/server/baselines';
 const db = database();
-for (const name of ['Random', 'Greedy']) {
+for (const { file, name } of BASELINES) {
   const artifact = await bundleProject([
-    { path: 'index.ts', content: await readFile(`bots/${name.toLowerCase()}.js`, 'utf8') },
+    { path: 'index.ts', content: await readFile(`bots/${file}`, 'utf8') },
   ]);
   const { data, error } = await db
     .from('splendor_bots')

@@ -3,6 +3,7 @@ import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { digest } from '../simulation';
+import { BASELINES } from './baselines';
 import type { ClockConfig, EvaluationReport, Mode } from '../types';
 export interface StoredBot {
   privateExecution?: boolean;
@@ -61,10 +62,7 @@ export class LabStore {
       PRAGMA user_version=1;`);
   }
   seedBaselines(): void {
-    for (const [file, name] of [
-      ['random.js', 'Random'],
-      ['greedy.js', 'Greedy'],
-    ])
+    for (const { file, name } of BASELINES)
       this.saveBot(name, readFileSync(resolve('bots', file), 'utf8'), true);
   }
   listBots(): StoredBot[] {

@@ -284,6 +284,8 @@ erDiagram
     json clock
     int revision
     boolean busy
+    json seats
+    int human_seat
   }
 ```
 
@@ -323,7 +325,9 @@ sequenceDiagram
 - `GameRecord` format 2 adds final and per-event clock snapshots and decision elapsed time. Rules replay verifies the action stream without rerunning bot code or measuring new wall time. The reader still accepts legacy format 1 records from the CLI; newly created web records are format 2.
 - `POST /api/bots` accepts a single source or a folder, stores an immutable version, and starts full qualification. Only passed versions enter evaluation. Failed versions expose diagnostic status to their owner.
 - `POST /api/evaluations` accepts bot version IDs, mode, paired-fixture count, and clock configuration. It returns a persisted job. `GET` endpoints expose status and completed reports; the game replay endpoint reconstructs verified frames.
-- `POST /api/play` creates an untimed human practice seat, accepts a versioned human action, or closes the session. The opponent uses a separate 60 + 1 clock. Stale/concurrent human moves are rejected.
+- `POST /api/play` creates a practice table (one untimed human seat among 1–3 chosen bots, seated first, last or at random), accepts a versioned human action, or closes the session. Each bot has its own 60 + 1 clock. Stale/concurrent human moves are rejected. Every response carries `steps`: each applied decision with the human's view right after it, so the client can replay bot turns one at a time.
+- `src/practice/bot-turns.ts` is the single bot-turn loop for both practice backends: the in-memory local session and the Modal `practice-turn` runner. A faulting bot is reported once, then plays the deterministic legal fallback without increments. `src/practice/moves.ts` maps clicks to actions only by selecting from `legalActions`, so the engine stays the sole rules authority in the browser too.
+- Public baselines (`src/server/baselines.ts`) are Random, Greedy and Strategist. Qualification always plays the fixed Random and Greedy pair; adding a stronger baseline does not change what a new bot must pass.
 - `CloudStore` owns hosted metadata and private artifact references. `LabStore` supplies the SQLite local mode. Each benchmark starts Elo at 1200; saved reports are not a persistent cross-cohort global rating ladder.
 
 ## Failure policies and deployment boundary
