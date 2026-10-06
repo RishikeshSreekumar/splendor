@@ -58,3 +58,75 @@ export function visibleCards(view: Observation): Card[] {
 export function findCard(view: Observation, cardId: string): Card | undefined {
   return visibleCards(view).find((c) => c.id === cardId);
 }
+const plus = (a: Tokens, b: Tokens, sign = 1): Tokens =>
+  Object.fromEntries(GEMS.map((g) => [g, a[g] + sign * b[g]])) as Tokens;
+/**
+ * The human's own move applied locally, so the table updates the moment they click
+ * instead of after every bot reply. Hidden information (deck refills, auto-visiting
+ * nobles) is left for the server's next view to fill in.
+ */
+export function previewAction(view: Observation, action: Action): Observation {
+  const you = view.you;
+  const players = view.players.map((p) => ({ ...p }));
+  const me = players[you];
+  let { bank, market, nobles, deckCounts } = view;
+  const dropFromMarket = (id: string) =>
+    (market = market.map((row) => row.filter((c) => c.id !== id)));
+  switch (action.type) {
+    case 'take':
+      me.tokens = plus(me.tokens, action.tokens);
+      bank = plus(bank, action.tokens, -1);
+      break;
+    case 'discard':
+      me.tokens = plus(me.tokens, action.tokens, -1);
+      bank = plus(bank, action.tokens);
+      break;
+    case 'buy': {
+      const card = findCard(view, action.cardId);
+      if (!card) break;
+      dropFromMarket(card.id);
+      me.reserved = me.reserved.filter((r) => r.card?.id !== card.id);
+      me.cards = [...me.cards, card];
+      me.bonuses = { ...me.bonuses, [card.bonus]: me.bonuses[card.bonus] + 1 };
+      me.points += card.points;
+      me.tokens = plus(me.tokens, action.payment, -1);
+      bank = plus(bank, action.payment);
+      break;
+    }
+    case 'reserve': {
+      const card = action.cardId ? findCard(view, action.cardId) : undefined;
+      if (card) {
+        dropFromMarket(card.id);
+        me.reserved = [...me.reserved, { card, public: true }];
+      } else if (action.tier) {
+        me.reserved = [...me.reserved, { hidden: true, tier: action.tier }];
+        deckCounts = deckCounts.map((n, i) => (i === action.tier! - 1 ? Math.max(0, n - 1) : n));
+      }
+      if (bank.gold > 0) {
+        me.tokens = { ...me.tokens, gold: me.tokens.gold + 1 };
+        bank = { ...bank, gold: bank.gold - 1 };
+      }
+      break;
+    }
+    case 'noble': {
+      const noble = nobles.find((n) => n.id === action.nobleId);
+      if (!noble) break;
+      nobles = nobles.filter((n) => n !== noble);
+      me.nobles = [...me.nobles, noble];
+      me.points += noble.points;
+      break;
+    }
+  }
+  const overLimit = bagSize(me.tokens) > 10;
+  return {
+    ...view,
+    bank,
+    market,
+    nobles,
+    deckCounts,
+    players,
+    legalActions: [],
+    phase: overLimit ? 'discard' : 'main',
+    currentPlayer: overLimit ? you : (you + 1) % players.length,
+  };
+}

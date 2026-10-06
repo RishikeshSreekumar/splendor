@@ -11,6 +11,7 @@ import {
   buyOptions,
   canAddGem,
   nobleAction,
+  previewAction,
   reserveAction,
 } from '../src/practice/moves';
 import { practiceTurn } from '../src/server/practice-turn';
@@ -189,4 +190,26 @@ test('Strategist plays fault-free and beats Greedy across paired seats', async (
     }
   }
   assert.ok(wins > losses, `expected Strategist to win more often (${wins}-${losses})`);
+});
+
+test('previewAction mirrors the engine for the human seat before bots reply', () => {
+  let state = createGame({ players: 3, seed: 'preview' });
+  for (let i = 0; i < 30 && state.status === 'playing'; i++) {
+    const view = observe(state, state.currentPlayer);
+    const action =
+      view.legalActions.find((a) => a.type === 'buy') ??
+      view.legalActions.find((a) => a.type === 'reserve' && a.cardId) ??
+      view.legalActions[0];
+    const preview = previewAction(view, action);
+    const next = applyAction(state, action);
+    const actual = observe(next, view.you);
+    const me = preview.players[view.you];
+    const real = actual.players[view.you];
+    assert.deepEqual(me.tokens, real.tokens);
+    assert.deepEqual(me.bonuses, real.bonuses);
+    assert.equal(me.points, real.points - real.nobles.length * 3 + me.nobles.length * 3);
+    assert.equal(me.reserved.length, real.reserved.length);
+    assert.deepEqual(preview.bank, actual.bank);
+    state = next;
+  }
 });

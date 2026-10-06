@@ -196,6 +196,8 @@ export function Token({
   onClick,
   disabled,
   selected,
+  available,
+  empty,
   size = 'md',
   title,
 }: {
@@ -204,19 +206,33 @@ export function Token({
   onClick?: () => void;
   disabled?: boolean;
   selected?: number;
-  size?: 'sm' | 'md' | 'lg';
+  /** Glows: clicking it is a legal next step. */
+  available?: boolean;
+  /** None held: drawn faint so non-zero stacks stand out. */
+  empty?: boolean;
+  size?: 'xs' | 'sm' | 'md' | 'lg';
   title?: string;
 }) {
   const content = (
     <>
       <span className={`gt-token-face gem-${gem}`}>
-        <GemIcon size={size === 'lg' ? 22 : size === 'md' ? 16 : 11} />
+        <GemIcon size={{ lg: 22, md: 16, sm: 11, xs: 9 }[size]} />
       </span>
       {count !== undefined && <strong className="gt-token-count">{count}</strong>}
       {selected ? <span className="gt-token-picked">+{selected}</span> : null}
     </>
   );
-  const classes = `gt-token ${size} ${selected ? 'picked' : ''} ${disabled ? 'disabled' : ''} ${onClick ? 'clickable' : ''}`;
+  const classes = [
+    'gt-token',
+    size,
+    selected && 'picked',
+    disabled && 'disabled',
+    available && 'available',
+    empty && 'empty',
+    onClick && 'clickable',
+  ]
+    .filter(Boolean)
+    .join(' ');
   return onClick ? (
     <button
       type="button"

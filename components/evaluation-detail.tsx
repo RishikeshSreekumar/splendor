@@ -229,6 +229,11 @@ export function EvaluationDetail({ id }: { id: string }) {
                   view={current.view}
                   seats={replay.names.map((name) => ({ name, kind: 'bot' as const }))}
                   actingSeat={current.event?.seat ?? null}
+                  actingLabel={
+                    current.event?.kind === 'action'
+                      ? actionLabel(current.event.action)
+                      : current.event?.code
+                  }
                 />
               </>
             )}

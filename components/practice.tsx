@@ -2,8 +2,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowRight,
+  Bookmark,
   Bot,
   Check,
+  ChevronDown,
   Crown,
   Gauge,
   Minus,
@@ -25,6 +27,7 @@ import {
   canAddGem,
   findCard,
   nobleAction,
+  previewAction,
   reserveAction,
 } from '@/src/practice/moves';
 import type { Action, Card, Gem, Observation } from '@/src/types';
@@ -201,6 +204,14 @@ export function Practice() {
     setBusy(true);
     setError('');
     clearSelection();
+    // Show the human's own move right away; bot replies follow once the server answers.
+    playToken.current++;
+    setCaption(null);
+    setShown({
+      view: previewAction(session.view, action),
+      acting: session.humanSeat,
+      fresh: new Set(),
+    });
     try {
       const next = await api<PracticeView>('/api/play', {
         type: 'action',
@@ -211,6 +222,7 @@ export function Practice() {
       setSession(next);
       await present(next);
     } catch (e) {
+      setShown(undefined);
       setError(errorMessage(e));
     } finally {
       setBusy(false);
@@ -235,8 +247,86 @@ export function Practice() {
     myTurn && selectedCard ? reserveAction(live!, { cardId: selectedCard }) : undefined;
   const deckReserve =
     myTurn && selectedDeck ? reserveAction(live!, { tier: selectedDeck }) : undefined;
+  const discarding = myTurn && live!.phase === 'discard';
+  const toReturn = discarding ? bagSize(live!.players[live!.you].tokens) - 10 - bagSize(ret) : 0;
+  const selectionPanel = selectedCard ? (
+    <CardPanel
+      card={findCard(live!, selectedCard)}
+      view={live!}
+      options={options}
+      paymentIndex={paymentIndex}
+      setPaymentIndex={setPaymentIndex}
+      reserve={cardReserve}
+      onPlay={play}
+      onCancel={clearSelection}
+    />
+  ) : selectedDeck ? (
+    <ActionPanel title={`Tier ${selectedDeck} deck`} onCancel={clearSelection}>
+      <p className="gt-pop-note">
+        Reserve the hidden top card
+        {live!.bank.gold ? ' and take 1 gold (wild).' : '. The bank has no gold left.'}
+      </p>
+      <div className="gt-pop-actions">
+        <button
+          className="gt-btn primary"
+          disabled={!deckReserve}
+          onClick={() => deckReserve && play(deckReserve)}
+        >
+          <Bookmark size={15} /> Reserve
+          {live!.bank.gold > 0 && <GoldBadge />}
+        </button>
+      </div>
+    </ActionPanel>
+  ) : undefined;
+  const bankPanel =
+    bagSize(take) > 0 ? (
+      <ActionPanel title="Take gems" onCancel={clearSelection}>
+        <SelectedBag bag={take} onRemove={(g) => setTake(dec(take, g))} />
+        <p className="gt-pop-note">
+          {takeAction
+            ? 'Ready. Click a gem again to put it back.'
+            : take[GEMS.find((g) => (take[g] ?? 0) >= 2) ?? 'gold']
+              ? 'Two of one color is a full take.'
+              : 'Pick 3 different colors, or the same color twice (needs 4 in the bank).'}
+        </p>
+        <div className="gt-pop-actions">
+          <button
+            className="gt-btn primary"
+            disabled={!takeAction}
+            onClick={() => takeAction && play(takeAction)}
+          >
+            <Check size={15} /> Take gems <kbd>↵</kbd>
+          </button>
+        </div>
+      </ActionPanel>
+    ) : undefined;
+  const handPanel = discarding ? (
+    <>
+      <span className="gt-status-text">
+        <strong>Return {toReturn > 0 ? toReturn : 'no'} more</strong> — click your gems below.
+      </span>
+      <SelectedBag bag={ret} onRemove={(g) => setRet(dec(ret, g))} />
+      <span className="gt-me-alert-actions">
+        {bagSize(ret) > 0 && (
+          <button className="gt-btn" onClick={() => setRet({})}>
+            Reset
+          </button>
+        )}
+        <button
+          className="gt-btn primary"
+          disabled={!returnAction}
+          onClick={() => returnAction && play(returnAction)}
+        >
+          <Check size={15} /> Return gems
+        </button>
+      </span>
+    </>
+  ) : undefined;
   const controls: TableControls | undefined = myTurn
     ? {
+        selectionPanel,
+        bankPanel,
+        handPanel,
         bankSelection: take,
         canTakeGem: (g) => canAddGem(live!, 'take', take, g),
         onBankGem: (g) => {
@@ -296,11 +386,10 @@ export function Practice() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   });
+  // While the server works, the seat to move in the shown (possibly optimistic) view is thinking.
   const thinkingSeat =
-    busy && live && session
-      ? live.currentPlayer === session.humanSeat
-        ? nextBotSeat(session)
-        : live.currentPlayer
+    busy && view && session && view.status === 'playing' && view.currentPlayer !== session.humanSeat
+      ? view.currentPlayer
       : null;
   const finished = live?.status === 'finished' && !animating;
   if (!session || !view || setupOpen)
@@ -327,111 +416,81 @@ export function Practice() {
       </>
     );
   const human = session.humanSeat;
+  const tone = finished ? 'done' : myTurn ? 'mine' : 'waiting';
+  const bannerSeat =
+    animating && caption ? caption.seat : (thinkingSeat ?? (myTurn ? human : null));
+  const round = Math.floor(view.turn / seats.length) + 1;
   return (
     <div className="gt-page">
-      <StatusBar>
-        {finished ? (
-          <ResultLine view={live!} seats={seats} human={human} />
-        ) : animating && caption ? (
-          <span className="gt-status-text">
-            <StepText step={caption} name={names[caption.seat]} />
+      <div className={`gt-status ${tone}`} role="status" aria-live="polite">
+        {bannerSeat !== null && !finished && (
+          <span className={`gt-avatar tone-${bannerSeat}`} aria-hidden="true">
+            {seats[bannerSeat]?.kind === 'human' ? 'Y' : <Bot size={15} />}
           </span>
-        ) : busy ? (
-          <span className="gt-status-text">
-            {thinkingSeat !== null ? (
+        )}
+        <span className="gt-status-text">
+          {finished ? (
+            <ResultLine view={live!} seats={seats} human={human} />
+          ) : animating && caption ? (
+            <StepText step={caption} name={names[caption.seat]} />
+          ) : busy ? (
+            thinkingSeat !== null ? (
               <>
-                <strong>{names[thinkingSeat]}</strong> is thinking…
+                <strong>{names[thinkingSeat]}</strong> is thinking
+                <span className="gt-dots" aria-hidden="true" />
               </>
             ) : (
               'Setting up the table…'
-            )}
+            )
+          ) : !myTurn ? (
+            'Waiting…'
+          ) : discarding ? (
+            <>
+              <strong>Too many gems.</strong> Return {toReturn} from your area below.
+            </>
+          ) : live!.phase === 'noble' ? (
+            <>
+              <strong>Nobles are visiting.</strong> Pick the glowing noble you want.
+            </>
+          ) : bagSize(take) > 0 ? (
+            <>
+              <strong>Picking gems.</strong> Confirm next to the bank.
+            </>
+          ) : selectedCard || selectedDeck ? (
+            <>
+              <strong>Card selected.</strong> Choose buy or reserve next to it.
+            </>
+          ) : live!.legalActions.length === 0 ? (
+            'You have no legal move. The game cannot continue.'
+          ) : (
+            <>
+              <strong>Your turn.</strong> Take gems from the bank, or pick a card. Glowing cards are
+              ones you can buy now.
+            </>
+          )}
+        </span>
+        <span className="gt-status-tools">
+          <span className="gt-round">
+            Round {round}
+            {view.finalRound && <em> · final round</em>}
           </span>
-        ) : !myTurn ? (
-          <span className="gt-status-text">Waiting…</span>
-        ) : live!.phase === 'discard' ? (
-          <>
-            <span className="gt-status-text">
-              <strong>Too many gems.</strong> Click your tokens to return{' '}
-              {bagSize(live!.players[human].tokens) - 10 - bagSize(ret)} more.
-            </span>
-            <SelectedBag bag={ret} onRemove={(g) => setRet(dec(ret, g))} />
-            <button
-              className="gt-btn primary"
-              disabled={!returnAction}
-              onClick={() => returnAction && play(returnAction)}
-            >
-              <Check size={15} /> Return gems
-            </button>
-            {bagSize(ret) > 0 && (
-              <button className="gt-btn" onClick={() => setRet({})}>
-                Reset
-              </button>
-            )}
-          </>
-        ) : live!.phase === 'noble' ? (
-          <span className="gt-status-text">
-            <Crown size={16} /> <strong>Several nobles want to visit you.</strong> Click the one you
-            want.
-          </span>
-        ) : bagSize(take) > 0 ? (
-          <>
-            <span className="gt-status-text">Take</span>
-            <SelectedBag bag={take} onRemove={(g) => setTake(dec(take, g))} />
-            <button
-              className="gt-btn primary"
-              disabled={!takeAction}
-              onClick={() => takeAction && play(takeAction)}
-            >
-              <Check size={15} /> Take gems
-            </button>
-            <button className="gt-btn" onClick={clearSelection}>
-              Cancel
-            </button>
-            {!takeAction && (
-              <span className="gt-hint">
-                {take[GEMS.find((g) => (take[g] ?? 0) >= 2) ?? 'gold']
-                  ? 'Two of one color is a full take.'
-                  : 'Pick three different colors, or click one color twice (needs 4 in the bank).'}
-              </span>
-            )}
-          </>
-        ) : selectedCard ? (
-          <CardChoice
-            card={findCard(live!, selectedCard)}
-            view={live!}
-            options={options}
-            paymentIndex={paymentIndex}
-            setPaymentIndex={setPaymentIndex}
-            reserve={cardReserve}
-            onPlay={play}
-            onCancel={clearSelection}
-          />
-        ) : selectedDeck ? (
-          <>
-            <span className="gt-status-text">
-              Reserve the top card of the <strong>tier {selectedDeck}</strong> deck
-              {live!.bank.gold ? ' and take 1 gold' : ''}?
-            </span>
-            <button
-              className="gt-btn primary"
-              disabled={!deckReserve}
-              onClick={() => deckReserve && play(deckReserve)}
-            >
-              <Check size={15} /> Reserve
-            </button>
-            <button className="gt-btn" onClick={clearSelection}>
-              Cancel
-            </button>
-          </>
-        ) : live!.legalActions.length === 0 ? (
-          <span className="gt-status-text">You have no legal move. The game cannot continue.</span>
-        ) : (
-          <span className="gt-status-text">
-            <strong>Your turn.</strong> Take gems from the bank, or click a card to buy or reserve
-            it.
-          </span>
-        )}
-      </StatusBar>
+          <button
+            className="gt-btn ghost"
+            onClick={() => setSetupOpen(true)}
+            title="Change opponents or settings"
+          >
+            <Settings2 size={14} /> Setup
+          </button>
+          <button
+            className="gt-btn ghost"
+            onClick={start}
+            disabled={busy}
+            title="Restart with the same opponents"
+          >
+            <RotateCcw size={14} /> New game
+          </button>
+        </span>
+      </div>
       <ErrorNotice error={error} />
       {notices.map((n) => (
         <div className="notice" key={n}>
@@ -441,37 +500,16 @@ export function Practice() {
       <GameTable
         view={view}
         seats={seats}
+        focusSeat={human}
         controls={controls}
         thinkingSeat={animating ? null : thinkingSeat}
         actingSeat={shown?.acting ?? null}
+        actingLabel={
+          animating && caption ? <StepText step={caption} name={names[caption.seat]} /> : undefined
+        }
         freshCards={shown?.fresh}
         timedSeats={new Set(seats.flatMap((s, i) => (s.kind === 'bot' ? [i] : [])))}
-        aside={
-          <>
-            <div className="gt-side-actions">
-              <span>
-                Round {Math.floor(view.turn / seats.length) + 1}
-                {view.finalRound && <em className="gt-final"> · final round</em>}
-              </span>
-              <button
-                className="gt-btn"
-                onClick={() => setSetupOpen(true)}
-                title="Change opponents or settings"
-              >
-                <Settings2 size={14} /> Setup
-              </button>
-              <button
-                className="gt-btn"
-                onClick={start}
-                disabled={busy}
-                title="Restart with the same opponents"
-              >
-                <RotateCcw size={14} /> New game
-              </button>
-            </div>
-            <GameLog log={log} names={names} />
-          </>
-        }
+        aside={<GameLog log={log} names={names} />}
       />
       {finished && (
         <GameOver
@@ -486,19 +524,16 @@ export function Practice() {
     </div>
   );
 }
-function nextBotSeat(session: PracticeView): number {
-  return (session.humanSeat + 1) % session.seats.length;
-}
 function dec(bag: Bag, g: Gem): Bag {
   const n = (bag[g] ?? 0) - 1;
   const { [g]: _, ...rest } = bag;
   return n > 0 ? { ...rest, [g]: n } : rest;
 }
-function StatusBar({ children }: { children: React.ReactNode }) {
+function GoldBadge() {
   return (
-    <div className="gt-status" role="status" aria-live="polite">
-      {children}
-    </div>
+    <span className="gt-gold-badge">
+      +1 <Token gem="gold" size="xs" />
+    </span>
   );
 }
 function SelectedBag({ bag, onRemove }: { bag: Bag; onRemove: (g: Gem) => void }) {
@@ -511,14 +546,53 @@ function SelectedBag({ bag, onRemove }: { bag: Bag; onRemove: (g: Gem) => void }
             gem={g}
             size="md"
             onClick={() => onRemove(g)}
-            title={`Remove ${GEM_NAMES[g]}`}
+            title={`Put back ${GEM_NAMES[g]}`}
           />
         )),
       )}
     </span>
   );
 }
-function CardChoice({
+function ActionPanel({
+  title,
+  onCancel,
+  children,
+}: {
+  title: React.ReactNode;
+  onCancel: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <>
+      <div className="gt-pop-head">
+        <span>{title}</span>
+        <button
+          className="gt-pop-close"
+          onClick={onCancel}
+          aria-label="Cancel (Esc)"
+          title="Cancel (Esc)"
+        >
+          <X size={14} />
+        </button>
+      </div>
+      {children}
+    </>
+  );
+}
+/** Gems and counts in one line, e.g. 2× sapphire 1× gold. */
+function GemLine({ bag, size = 'md' }: { bag: Partial<Record<Gem, number>>; size?: 'sm' | 'md' }) {
+  return (
+    <span className={`gt-gem-line ${size}`}>
+      {GEMS.filter((g) => bag[g]).map((g) => (
+        <span key={g} className="gt-gem-count" title={`${bag[g]} ${GEM_NAMES[g]}`}>
+          <Token gem={g} size={size} />
+          <b>{bag[g]}</b>
+        </span>
+      ))}
+    </span>
+  );
+}
+function CardPanel({
   card,
   view,
   options,
@@ -539,72 +613,81 @@ function CardChoice({
 }) {
   if (!card) return null;
   const me = view.players[view.you];
-  const payment = options[Math.min(paymentIndex, options.length - 1)];
-  const missing = COLORS.map((c) => ({
-    c,
-    n: Math.max(0, card.cost[c] - me.bonuses[c] - me.tokens[c]),
-  })).filter((m) => m.n > 0);
-  const short = Math.max(0, missing.reduce((n, m) => n + m.n, 0) - me.tokens.gold);
-  return (
+  const index = Math.min(paymentIndex, options.length - 1);
+  const payment = options[index];
+  const isMine = me.reserved.some((r) => r.card?.id === card.id);
+  const discount = Object.fromEntries(
+    COLORS.map((c) => [c, Math.min(card.cost[c], me.bonuses[c])]),
+  ) as Partial<Record<Gem, number>>;
+  const hasDiscount = COLORS.some((c) => discount[c]);
+  const missing = Object.fromEntries(
+    COLORS.map((c) => [c, Math.max(0, card.cost[c] - me.bonuses[c] - me.tokens[c])]),
+  ) as Partial<Record<Gem, number>>;
+  const missingTotal = COLORS.reduce((n, c) => n + (missing[c] ?? 0), 0);
+  const short = Math.max(0, missingTotal - me.tokens.gold);
+  const title = (
     <>
+      Tier {card.tier} {GEM_NAMES[card.bonus]}
+      {card.points > 0 && <b className="gt-pop-points"> · {card.points}★</b>}
+    </>
+  );
+  return (
+    <ActionPanel title={title} onCancel={onCancel}>
       {payment ? (
-        <>
-          <button className="gt-btn primary" onClick={() => onPlay(payment)}>
-            <Check size={15} /> Buy
+        <div className="gt-pay">
+          <span className="gt-label">You pay</span>
+          {GEMS.every((g) => !payment.payment[g]) ? (
+            <p className="gt-pay-free">Nothing — your cards cover it all.</p>
+          ) : (
+            <GemLine bag={payment.payment} />
+          )}
+          {hasDiscount && (
+            <span className="gt-pay-sub">
+              Your cards save <GemLine bag={discount} size="sm" />
+            </span>
+          )}
+          <button className="gt-btn primary block" onClick={() => onPlay(payment)}>
+            <Check size={15} /> Buy{card.points > 0 ? ` · +${card.points}★` : ''} <kbd>↵</kbd>
           </button>
-          <span className="gt-status-text">paying</span>
-          <span className="gt-selected-bag">
-            {GEMS.every((g) => !payment.payment[g]) ? (
-              <em>nothing — fully discounted</em>
-            ) : (
-              GEMS.filter((g) => payment.payment[g]).map((g) => (
-                <span key={g} className="gt-inline-gem">
-                  {payment.payment[g] > 1 && <b>{payment.payment[g]}×</b>}
-                  <Token gem={g} size="sm" />
-                </span>
-              ))
-            )}
-          </span>
           {options.length > 1 && (
             <button
-              className="gt-btn"
-              onClick={() => setPaymentIndex((paymentIndex + 1) % options.length)}
+              className="gt-link"
+              onClick={() => setPaymentIndex((index + 1) % options.length)}
               title="Choose a different way to pay, e.g. spending gold instead of colored gems"
             >
-              Payment {Math.min(paymentIndex, options.length - 1) + 1}/{options.length}
+              Pay another way ({index + 1}/{options.length})
             </button>
           )}
-        </>
+        </div>
       ) : (
-        <span className="gt-status-text">
-          You need <strong>{short} more</strong>
-          {missing.length > 0 && (
-            <>
-              {' '}
-              (
-              {missing.map((m, i) => (
-                <span key={m.c}>
-                  {i > 0 && ', '}
-                  {m.n} {GEM_NAMES[m.c]}
-                </span>
-              ))}
-              {me.tokens.gold > 0 &&
-                `, gold covers ${Math.min(me.tokens.gold, short + me.tokens.gold)}`}
-              )
-            </>
-          )}{' '}
-          to buy this card.
-        </span>
+        <div className="gt-pay short">
+          <span className="gt-label">
+            Short by {short} gem{short === 1 ? '' : 's'}
+          </span>
+          <GemLine bag={missing} />
+          {me.tokens.gold > 0 && (
+            <span className="gt-pay-sub">
+              Your {me.tokens.gold} gold covers {Math.min(me.tokens.gold, missingTotal)} of these.
+            </span>
+          )}
+        </div>
       )}
-      {reserve && (
-        <button className="gt-btn" onClick={() => onPlay(reserve)}>
-          Reserve{view.bank.gold ? ' +1 gold' : ''}
-        </button>
+      {!isMine && (
+        <div className="gt-pop-actions">
+          {reserve ? (
+            <button
+              className={`gt-btn ${payment ? '' : 'primary'} block`}
+              onClick={() => onPlay(reserve)}
+            >
+              <Bookmark size={15} /> Reserve
+              {view.bank.gold > 0 && <GoldBadge />}
+            </button>
+          ) : (
+            <p className="gt-pop-note">You already hold 3 reserved cards.</p>
+          )}
+        </div>
       )}
-      <button className="gt-btn" onClick={onCancel}>
-        <X size={14} /> Cancel
-      </button>
-    </>
+    </ActionPanel>
   );
 }
 function ResultLine({
@@ -618,14 +701,14 @@ function ResultLine({
 }) {
   const won = view.winners.includes(human);
   return (
-    <span className="gt-status-text">
+    <>
       <Trophy size={16} />{' '}
       {view.winners.length > 1
         ? `Shared victory: ${view.winners.map((w) => seats[w].name).join(' & ')}`
         : won
           ? 'You won. Well played!'
           : `${seats[view.winners[0]]?.name ?? 'Nobody'} wins this game.`}
-    </span>
+    </>
   );
 }
 function GameOver({
@@ -716,6 +799,114 @@ function GameLog({ log, names }: { log: LogEntry[]; names: string[] }) {
     </section>
   );
 }
+const levelOf = (b?: StoredBot) => (b?.baseline ? LEVELS[b.name] : undefined);
+function LevelChip({ bot }: { bot?: StoredBot }) {
+  const info = levelOf(bot);
+  return (
+    <span className={`gt-level level-${info?.rank ?? 'custom'}`}>{info?.label ?? 'Your bot'}</span>
+  );
+}
+/** A listbox styled like the rest of the table, with each bot's level and play style. */
+function OpponentSelect({
+  label,
+  value,
+  choices,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  choices: StoredBot[];
+  onChange: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(0);
+  const root = useRef<HTMLDivElement>(null);
+  const listId = `${label.replace(/\W+/g, '-').toLowerCase()}-list`;
+  const current = choices.find((b) => b.id === value);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => {
+      if (!root.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [open]);
+  const show = () => {
+    setActive(
+      Math.max(
+        0,
+        choices.findIndex((b) => b.id === value),
+      ),
+    );
+    setOpen(true);
+  };
+  const pick = (i: number) => {
+    if (choices[i]) onChange(choices[i].id);
+    setOpen(false);
+  };
+  const onKey = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') return setOpen(false);
+    if (!open && ['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(e.key)) {
+      e.preventDefault();
+      return show();
+    }
+    if (!open) return;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const step = e.key === 'ArrowDown' ? 1 : -1;
+      setActive((active + step + choices.length) % choices.length);
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      pick(active);
+    } else if (e.key === 'Tab') setOpen(false);
+  };
+  const firstOwn = choices.findIndex((b) => !b.baseline);
+  return (
+    <div className={`gt-select ${open ? 'open' : ''}`} ref={root}>
+      <button
+        type="button"
+        className="gt-select-button"
+        role="combobox"
+        aria-label={label}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={listId}
+        aria-activedescendant={open ? `${listId}-${active}` : undefined}
+        onClick={() => (open ? setOpen(false) : show())}
+        onKeyDown={onKey}
+      >
+        <span className="gt-select-name">{current?.name ?? 'Choose a bot'}</span>
+        <LevelChip bot={current} />
+        <ChevronDown size={16} className="gt-select-chevron" />
+      </button>
+      {open && (
+        <ul className="gt-select-list" role="listbox" id={listId} aria-label={label}>
+          {choices.map((b, i) => (
+            <li
+              key={b.id}
+              id={`${listId}-${i}`}
+              role="option"
+              aria-selected={b.id === value}
+              className={`${i === active ? 'active' : ''} ${i === firstOwn && i > 0 ? 'divided' : ''}`}
+              onMouseEnter={() => setActive(i)}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => pick(i)}
+            >
+              <span className="gt-select-row">
+                <strong>{b.name}</strong>
+                <LevelChip bot={b} />
+                {b.id === value && <Check size={15} className="gt-select-check" />}
+              </span>
+              <span className="gt-select-blurb">
+                {levelOf(b)?.blurb ?? 'A bot you built in the workshop.'}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 function Lobby({
   choices,
   settings,
@@ -732,7 +923,6 @@ function Lobby({
   onResume?: () => void;
 }) {
   const set = (patch: Partial<Settings>) => onChange({ ...settings, ...patch });
-  const level = (b?: StoredBot) => (b?.baseline ? LEVELS[b.name] : undefined);
   return (
     <div className="gt-lobby">
       <section className="panel">
@@ -740,35 +930,21 @@ function Lobby({
         <h2>Who are you playing?</h2>
         <div className="gt-seats">
           {settings.opponents.map((id, slot) => {
-            const bot = choices.find((b) => b.id === id);
-            const info = level(bot);
             return (
               <div className="gt-seat-row" key={slot}>
                 <span className={`gt-avatar tone-${slot + 1}`}>
                   <Bot size={15} />
                 </span>
-                <label className="sr-only" htmlFor={`opponent-${slot}`}>
-                  Opponent {slot + 1}
-                </label>
-                <select
-                  id={`opponent-${slot}`}
+                <OpponentSelect
+                  label={`Opponent ${slot + 1}`}
                   value={id}
-                  onChange={(e) => {
+                  choices={choices}
+                  onChange={(value) => {
                     const opponents = [...settings.opponents];
-                    opponents[slot] = e.target.value;
+                    opponents[slot] = value;
                     set({ opponents });
                   }}
-                >
-                  {choices.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name}
-                      {level(b) ? ` — ${level(b)!.label}` : ' — your bot'}
-                    </option>
-                  ))}
-                </select>
-                <span className={`gt-level level-${info?.rank ?? 'custom'}`}>
-                  {info?.label ?? 'Custom'}
-                </span>
+                />
                 <button
                   className="gt-btn icon"
                   aria-label={`Remove opponent ${slot + 1}`}
@@ -794,17 +970,6 @@ function Lobby({
               <Plus size={14} /> Add opponent
             </button>
           )}
-        </div>
-        <div className="gt-levels">
-          {choices
-            .filter((b) => level(b))
-            .map((b) => (
-              <p key={b.id}>
-                <b>{b.name}</b>{' '}
-                <span className={`gt-level level-${level(b)!.rank}`}>{level(b)!.label}</span>{' '}
-                {level(b)!.blurb}
-              </p>
-            ))}
         </div>
       </section>
       <section className="panel">
