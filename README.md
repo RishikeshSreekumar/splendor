@@ -1,5 +1,9 @@
 # Splendor Strategy Lab
 
+[![Quality checks](https://github.com/sudip-mondal-2002/splendor/actions/workflows/ci.yml/badge.svg)](https://github.com/sudip-mondal-2002/splendor/actions/workflows/ci.yml)
+
+[Live application](https://splendor.sudipmondal.co.in) · [Deployment guide](docs/deployment.md). Pushes to `main` automatically deploy to production through the connected Vercel project.
+
 A Next.js application for learning vanilla Splendor, writing JavaScript players, and comparing strategies under equal time controls. Application code, game rules, runner, tests, and scripts use TypeScript; submissions may be JavaScript modules or TypeScript folders with a root `index.ts`.
 
 ## Run
