@@ -6,6 +6,7 @@ import {
   Bot,
   Check,
   ChevronDown,
+  Copy,
   Crown,
   Gauge,
   Minus,
@@ -15,11 +16,19 @@ import {
   ScrollText,
   Settings2,
   Trophy,
+  User,
+  UserPlus,
   X,
 } from 'lucide-react';
 import type { StoredBot } from '@/src/server/store';
-import type { PracticeSeat, PracticeStep, PracticeView, SeatOrder } from '@/src/practice/types';
-import { MAX_OPPONENTS } from '@/src/practice/types';
+import type {
+  PracticeSeat,
+  PracticeStep,
+  PracticeView,
+  SeatOrder,
+  SeatRating,
+} from '@/src/practice/types';
+import { humanSeats, INVITED_HUMAN, MAX_OPPONENTS } from '@/src/practice/types';
 import {
   bagAction,
   bagSize,
@@ -52,6 +61,8 @@ interface Settings {
   opponents: string[];
   order: SeatOrder;
   speed: Speed;
+  /** Shown to friends at a shared table. */
+  name: string;
 }
 type Bag = Partial<Record<Gem, number>>;
 interface LogEntry {
@@ -74,7 +85,37 @@ function saveSettings(settings: Settings) {
   }
 }
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-/** Public baselines first (easiest to strongest), then the player's own bots. */
+/** How often a shared table checks for other players' moves while it waits. */
+const POLL_MS = 2000;
+/** Seat tokens of tables joined from an invite link, kept per game. */
+const seatKey = (id: string) => `splendor-seat:${id}`;
+function loadSeatToken(id: string): string | undefined {
+  try {
+    return localStorage.getItem(seatKey(id)) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+function saveSeatToken(id: string, token: string) {
+  try {
+    localStorage.setItem(seatKey(id), token);
+  } catch {
+    /* the seat lasts for this page only */
+  }
+}
+const inviteLink = (id: string) => `${window.location.origin}/play?join=${id}`;
+/** Puts the table in the address bar so a joined player's reload returns to it. */
+function showTableUrl(id?: string) {
+  window.history.replaceState(null, '', id ? `/play?game=${id}` : '/play');
+}
+/** The lobby's stand-in for an open seat; it is not a bot. */
+const FRIEND = {
+  id: INVITED_HUMAN,
+  name: 'A friend',
+  baseline: false,
+} as StoredBot;
+const isFriend = (b?: StoredBot) => b?.id === INVITED_HUMAN;
+/** Public baselines first (easiest to strongest), then an invited friend, then own bots. */
 function opponentChoices(bots: StoredBot[]) {
   const baselines = new Map<string, StoredBot>();
   for (const b of bots) if (b.baseline && !baselines.has(b.name)) baselines.set(b.name, b);
@@ -82,7 +123,7 @@ function opponentChoices(bots: StoredBot[]) {
     (a, b) => (LEVELS[a.name]?.rank ?? 9) - (LEVELS[b.name]?.rank ?? 9),
   );
   const own = bots.filter((b) => !b.baseline && (b.qualification ?? 'passed') === 'passed');
-  return [...sorted, ...own];
+  return [...sorted, FRIEND, ...own];
 }
 export function Practice() {
   const [bots, setBots] = useState<StoredBot[]>([]);
@@ -90,8 +131,13 @@ export function Practice() {
     opponents: [],
     order: 'first',
     speed: 'normal',
+    name: '',
   });
   const [session, setSession] = useState<PracticeView>();
+  /** Set while seated at someone else's table: authorizes this player's requests. */
+  const [seatToken, setSeatToken] = useState<string>();
+  /** A table opened from an invite link that this browser has not joined yet. */
+  const [joining, setJoining] = useState<string>();
   const [shown, setShown] = useState<{
     view: Observation;
     acting: number | null;
@@ -124,25 +170,10 @@ export function Practice() {
           opponents: valid.length ? valid : fallback ? [fallback.id] : [],
           order: saved.order ?? 'first',
           speed: saved.speed ?? 'normal',
+          name: saved.name ?? '',
         });
       })
       .catch((e) => setError(errorMessage(e)));
-  }, []);
-  // One unfinished game per account: pick it up again, whether it began here or from an agent.
-  useEffect(() => {
-    api<{ game: PracticeView | null }>('/api/play')
-      .then(({ game }) => {
-        if (!game) return;
-        setSession(game);
-        setShown({ view: game.view, acting: null, fresh: new Set() });
-        setSetupOpen(false);
-        setNotices([
-          game.busy
-            ? 'Resumed your unfinished game. A move is still finishing; reload in a moment.'
-            : 'Resumed your unfinished game.',
-        ]);
-      })
-      .catch(() => {});
   }, []);
   const clearSelection = useCallback(() => {
     setTake({});
@@ -153,7 +184,7 @@ export function Practice() {
   }, []);
   /** Shows each applied decision in turn, then settles on the server's final view. */
   const present = useCallback(
-    async (next: PracticeView) => {
+    async (next: PracticeView, from?: Observation) => {
       const token = ++playToken.current;
       const delay = STEP_DELAY[settings.speed];
       setNotices(next.notices);
@@ -162,7 +193,7 @@ export function Practice() {
         ...old,
       ]);
       if (next.steps.length) setAnimating(true);
-      let previous = shown?.view;
+      let previous = from ?? shown?.view;
       for (const [i, step] of next.steps.entries()) {
         if (token !== playToken.current) return;
         const before = new Set((previous?.market ?? []).flat().map((c) => c.id));
@@ -189,7 +220,9 @@ export function Practice() {
   async function start() {
     if (!settings.opponents.length) return;
     const live = session?.view;
+    const hosting = Boolean(session) && !seatToken;
     if (
+      hosting &&
       live?.status === 'playing' &&
       live.players[session!.humanSeat].turns >= 3 &&
       !window.confirm('Starting over abandons this game, which counts as a rated loss. Continue?')
@@ -206,12 +239,15 @@ export function Practice() {
           clockConfig: { initialMs: 60000, incrementMs: 1000 },
           opponents: settings.opponents,
           order: settings.order,
+          name: settings.opponents.includes(INVITED_HUMAN)
+            ? settings.name.trim() || 'Host'
+            : undefined,
           replace,
         });
       let next: PracticeView;
       try {
-        // Starting over from this table abandons the game it shows.
-        next = await request(Boolean(session));
+        // Starting over from a table you host abandons the game it shows.
+        next = await request(hosting);
       } catch (e) {
         if (
           !(e instanceof ApiRequestError && e.status === 409 && e.data.activeGameId) ||
@@ -225,6 +261,9 @@ export function Practice() {
       clearSelection();
       setLog([]);
       setCaption(null);
+      setSeatToken(undefined);
+      setJoining(undefined);
+      showTableUrl();
       setSession(next);
       setShown(undefined);
       setSetupOpen(false);
@@ -248,19 +287,21 @@ export function Practice() {
       acting: session.humanSeat,
       fresh: new Set(),
     });
+    const landed = sleep(FLIGHT_MS[settings.speed] + 400);
     try {
-      // Let the human's own pieces land before the bots start moving theirs.
-      const [next] = await Promise.all([
-        api<PracticeView>('/api/play', {
-          type: 'action',
-          id: session.id,
-          action,
-          revision: session.revision,
-        }),
-        sleep(FLIGHT_MS[settings.speed] + 400),
-      ]);
-      setSession(next);
-      await present(next);
+      // The server applies the human's move alone and answers at once, so the board settles
+      // (the card dealt into the gap, a visiting noble) without waiting for any bot.
+      const mine = await api<PracticeView>('/api/play', {
+        type: 'action',
+        id: session.id,
+        action,
+        revision: session.revision,
+        split: true,
+        token: seatToken,
+      });
+      setSession(mine);
+      await present(mine, session.view);
+      if (mine.pending) await runBots(mine, mine.view, landed);
     } catch (e) {
       setShown(undefined);
       setError(errorMessage(e));
@@ -268,6 +309,143 @@ export function Practice() {
       setBusy(false);
     }
   }
+  /**
+   * Asks the server for the bots' replies, starting at once so they compute while the
+   * human's pieces are still landing, and plays them back after `ready`.
+   */
+  async function runBots(
+    game: PracticeView,
+    from: Observation,
+    ready?: Promise<unknown>,
+    token = seatToken,
+  ) {
+    const [next] = await Promise.all([
+      api<PracticeView>('/api/play', {
+        type: 'advance',
+        id: game.id,
+        revision: game.revision,
+        token,
+      }),
+      ready,
+    ]);
+    setSession(next);
+    await present(next, from);
+  }
+  /** Takes the open seat at the table from the invite link. */
+  async function join(id: string) {
+    setBusy(true);
+    setError('');
+    try {
+      const name = settings.name.trim() || 'Guest';
+      saveSettings({ ...settings, name });
+      const game = await api<PracticeView>('/api/play', { type: 'join', id, name });
+      if (game.seatToken) saveSeatToken(id, game.seatToken);
+      setSeatToken(game.seatToken);
+      setJoining(undefined);
+      showTableUrl(id);
+      setSession(game);
+      setShown({ view: game.view, acting: null, fresh: new Set() });
+      setSetupOpen(false);
+      setNotices([`You joined as ${name}.`]);
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  // One unfinished game per account: pick it up again, whether it began here or from an agent.
+  // An invite link (`?join=`) or a joined table (`?game=`) opens that table instead.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const invited = params.get('join'),
+      table = params.get('game') ?? invited;
+    const token = table ? loadSeatToken(table) : undefined;
+    if (invited && !token) {
+      // Deferred like the fetch below: the server-rendered page shows the lobby first.
+      void Promise.resolve(invited).then(setJoining);
+      return;
+    }
+    const query = table
+      ? `/api/play?${new URLSearchParams({ id: table, ...(token ? { token } : {}) })}`
+      : '/api/play';
+    if (table) showTableUrl(table);
+    api<{ game: PracticeView | null }>(query)
+      .then(({ game }) => {
+        if (!game) return;
+        setSeatToken(token);
+        setSession(game);
+        setShown({ view: game.view, acting: null, fresh: new Set() });
+        setSetupOpen(false);
+        setNotices([
+          game.busy
+            ? 'Resumed your unfinished game. A move is still finishing; reload in a moment.'
+            : 'Resumed your unfinished game.',
+        ]);
+        // Left while the bots were due to move: play their replies now.
+        if (game.pending && !game.busy) {
+          setBusy(true);
+          runBots(game, game.view, undefined, token)
+            .catch((e) => setError(errorMessage(e)))
+            .finally(() => setBusy(false));
+        }
+      })
+      .catch((e) => {
+        if (!table) return;
+        showTableUrl();
+        setError(errorMessage(e));
+      });
+    // Runs once on load; `runBots` only reads state through its arguments and setters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // A shared table has other people at it: check for their moves (and joins) while idle.
+  const shared = humanSeats(session?.seats ?? []).length > 1;
+  const stalled = useRef<number>(undefined);
+  useEffect(() => {
+    if (!session || !shared || busy || animating || session.view.status !== 'playing') return;
+    let stopped = false,
+      timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      try {
+        const query = new URLSearchParams({
+          id: session.id,
+          since: String(session.revision),
+          ...(seatToken ? { token: seatToken } : {}),
+        });
+        const { game } = await api<{ game: PracticeView | null }>(`/api/play?${query}`);
+        if (stopped || !game) return;
+        if (game.revision !== session.revision) {
+          stalled.current = undefined;
+          setSession(game);
+          return void (await present(game, session.view));
+        }
+        if (JSON.stringify(game.seats) !== JSON.stringify(session.seats)) return setSession(game);
+        if (game.pending && !game.busy) {
+          // The player who moved left before the bots replied: play them from here.
+          if (stalled.current === game.revision) {
+            stalled.current = undefined;
+            setBusy(true);
+            return void (await runBots(game, game.view)
+              .catch(() => {})
+              .finally(() => setBusy(false)));
+          }
+          stalled.current = game.revision;
+        }
+      } catch (e) {
+        if (e instanceof ApiRequestError && (e.status === 404 || e.status === 403)) {
+          setError(e.status === 404 ? 'The host ended this game.' : e.message);
+          return;
+        }
+      }
+      if (!stopped) timer = setTimeout(poll, POLL_MS);
+    };
+    timer = setTimeout(poll, POLL_MS);
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+    };
+    // `present` and `runBots` change identity with every shown board; the session drives this.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session, shared, busy, animating, seatToken]);
   const view = shown?.view ?? session?.view;
   const live = session?.view;
   const myTurn =
@@ -276,8 +454,12 @@ export function Practice() {
     !animating &&
     live.status === 'playing' &&
     live.currentPlayer === session!.humanSeat;
-  const names = session?.seats.map((s) => s.name) ?? [];
-  const seats = session?.seats ?? [];
+  // At a shared table every seat has a person's name; mark your own.
+  const seats =
+    session?.seats.map((s, i) =>
+      shared && i === session.humanSeat ? { ...s, name: `${s.name} (you)` } : s,
+    ) ?? [];
+  const names = seats.map((s) => s.name);
   // Derived interaction state, only meaningful on the human's live turn.
   const options = myTurn && selectedCard ? buyOptions(live!, selectedCard) : [];
   const payment = options[Math.min(paymentIndex, options.length - 1)];
@@ -432,6 +614,52 @@ export function Practice() {
       ? view.currentPlayer
       : null;
   const finished = live?.status === 'finished' && !animating;
+  if (joining && !session)
+    return (
+      <>
+        <div className="page-heading compact">
+          <div>
+            <div className="eyebrow">
+              <span /> A SHARED TABLE
+            </div>
+            <h1>You&apos;re invited.</h1>
+            <p>A friend saved you a seat at their Splendor table. Pick a name and sit down.</p>
+          </div>
+        </div>
+        <ErrorNotice error={error} />
+        <form
+          className="panel gt-join"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void join(joining);
+          }}
+        >
+          <label>
+            <span className="step-label">YOUR NAME</span>
+            <input
+              value={settings.name}
+              maxLength={24}
+              placeholder="Guest"
+              autoFocus
+              onChange={(e) => setSettings({ ...settings, name: e.target.value })}
+            />
+          </label>
+          <button className="button primary wide" disabled={busy}>
+            <UserPlus size={16} /> {busy ? 'Joining…' : 'Join the table'}
+          </button>
+          <button
+            type="button"
+            className="button secondary wide"
+            onClick={() => {
+              setJoining(undefined);
+              showTableUrl();
+            }}
+          >
+            Set up my own game instead
+          </button>
+        </form>
+      </>
+    );
   if (!session || !view || setupOpen)
     return (
       <>
@@ -441,7 +669,9 @@ export function Practice() {
               <span /> THE PRACTICE TABLE
             </div>
             <h1>Take a seat.</h1>
-            <p>Play a full game of Splendor against one to three bots. Click to play — no menus.</p>
+            <p>
+              Play a full game of Splendor against bots, friends, or both. Click to play — no menus.
+            </p>
           </div>
         </div>
         <ErrorNotice error={error} />
@@ -457,6 +687,8 @@ export function Practice() {
     );
   const human = session.humanSeat;
   const tone = finished ? 'done' : myTurn ? 'mine' : 'waiting';
+  const waitingFor = live && live.status === 'playing' ? session.seats[live.currentPlayer] : null;
+  const openSeats = session.seats.filter((s) => s.kind === 'human' && s.open).length;
   const bannerSeat =
     animating && caption ? caption.seat : (thinkingSeat ?? (myTurn ? human : null));
   const round = Math.floor(view.turn / seats.length) + 1;
@@ -465,7 +697,7 @@ export function Practice() {
       <div className={`gt-status ${tone}`} role="status" aria-live="polite">
         {bannerSeat !== null && !finished && (
           <span className={`gt-avatar tone-${bannerSeat}`} aria-hidden="true">
-            {seats[bannerSeat]?.kind === 'human' ? 'Y' : <Bot size={15} />}
+            <SeatAvatar seat={seats[bannerSeat]} size={15} />
           </span>
         )}
         <span className="gt-status-text">
@@ -483,7 +715,20 @@ export function Practice() {
               'Setting up the table…'
             )
           ) : !myTurn ? (
-            'Waiting…'
+            waitingFor?.kind === 'human' ? (
+              waitingFor.open ? (
+                <>
+                  <strong>Waiting for a friend to join.</strong> Share the invite link below.
+                </>
+              ) : (
+                <>
+                  Waiting for <strong>{waitingFor.name}</strong> to move
+                  <span className="gt-dots" aria-hidden="true" />
+                </>
+              )
+            ) : (
+              'Waiting…'
+            )
           ) : discarding ? (
             <>
               <strong>Too many gems.</strong> Return {toReturn} from your area below.
@@ -532,6 +777,7 @@ export function Practice() {
         </span>
       </div>
       <ErrorNotice error={error} />
+      {openSeats > 0 && !finished && <InviteBar id={session.id} open={openSeats} />}
       {notices.map((n) => (
         <div className="notice" key={n}>
           {n}
@@ -557,7 +803,8 @@ export function Practice() {
           view={live!}
           seats={seats}
           human={human}
-          onRematch={start}
+          ratings={session.ratings}
+          onRematch={seatToken ? undefined : start}
           onSetup={() => setSetupOpen(true)}
           busy={busy}
         />
@@ -756,6 +1003,7 @@ function GameOver({
   view,
   seats,
   human,
+  ratings,
   onRematch,
   onSetup,
   busy,
@@ -763,7 +1011,9 @@ function GameOver({
   view: Observation;
   seats: PracticeSeat[];
   human: number;
-  onRematch: () => void;
+  ratings?: SeatRating[];
+  /** Absent for a joined player: the host starts the next game. */
+  onRematch?: () => void;
   onSetup: () => void;
   busy: boolean;
 }) {
@@ -794,20 +1044,24 @@ function GameOver({
           {ranking.map(({ p, i }) => (
             <li key={i} className={view.winners.includes(i) ? 'won' : ''}>
               <span className={`gt-avatar tone-${i}`}>
-                {seats[i].kind === 'human' ? 'Y' : <Bot size={14} />}
+                <SeatAvatar seat={seats[i]} size={14} />
               </span>
               <strong>{seats[i].name}</strong>
               <span>
                 {p.cards.length} cards · {p.nobles.length} nobles
               </span>
               <b>{p.points}★</b>
+              <EloChange rating={ratings?.find((r) => r.seat === i)} />
             </li>
           ))}
         </ol>
+        {!ratings && <p className="muted gt-elo-note">Ratings will update shortly.</p>}
         <div className="gt-modal-actions">
-          <button className="button primary" onClick={onRematch} disabled={busy}>
-            <RotateCcw size={16} /> Rematch
-          </button>
+          {onRematch && (
+            <button className="button primary" onClick={onRematch} disabled={busy}>
+              <RotateCcw size={16} /> Rematch
+            </button>
+          )}
           <button className="button secondary" onClick={onSetup}>
             <Settings2 size={16} /> Change setup
           </button>
@@ -817,6 +1071,66 @@ function GameOver({
         </div>
       </div>
     </div>
+  );
+}
+/** A person's initial, or a bot icon. */
+function SeatAvatar({ seat, size }: { seat?: PracticeSeat; size: number }) {
+  if (seat?.kind !== 'human') return <Bot size={size} />;
+  if (seat.open) return <UserPlus size={size} />;
+  return <>{seat.name.trim()[0]?.toUpperCase() ?? <User size={size} />}</>;
+}
+/** The link that seats a friend at this table, with a copy button. */
+function InviteBar({ id, open }: { id: string; open: number }) {
+  const [copied, setCopied] = useState(false);
+  const link = inviteLink(id);
+  return (
+    <div className="notice gt-invite">
+      <UserPlus size={15} />
+      <span>
+        {open === 1 ? 'One seat is' : `${open} seats are`} open. Send this link to a friend:
+      </span>
+      <code>{link}</code>
+      <button
+        className="gt-btn"
+        onClick={() =>
+          navigator.clipboard
+            .writeText(link)
+            .then(() => setCopied(true))
+            .catch(() => {})
+        }
+      >
+        {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? 'Copied' : 'Copy link'}
+      </button>
+    </div>
+  );
+}
+/** Rating after the game with the change, counting up from the old rating like chess.com. */
+function EloChange({ rating }: { rating?: SeatRating }) {
+  const after = rating ? Math.round(rating.after) : 0;
+  const before = rating ? Math.round(rating.before) : 0;
+  const [shown, setShown] = useState(before);
+  useEffect(() => {
+    if (!rating) return;
+    let frame = 0;
+    const start = performance.now();
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start - 400) / 900);
+      setShown(Math.round(before + (after - before) * Math.max(0, 1 - (1 - t) ** 3)));
+      if (t < 1) frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [rating, before, after]);
+  if (!rating) return <span className="gt-elo none" />;
+  const d = after - before;
+  return (
+    <span className="gt-elo" title={`Elo ${before} → ${after}`}>
+      <strong>{shown}</strong>
+      <em className={d > 0 ? 'up' : d < 0 ? 'down' : 'even'}>
+        {d > 0 ? '+' : d < 0 ? '−' : '±'}
+        {Math.abs(d)}
+      </em>
+    </span>
   );
 }
 function GameLog({ log, names }: { log: LogEntry[]; names: string[] }) {
@@ -843,6 +1157,7 @@ function GameLog({ log, names }: { log: LogEntry[]; names: string[] }) {
 const levelOf = (b?: StoredBot) => (b?.baseline ? LEVELS[b.name] : undefined);
 function LevelChip({ bot }: { bot?: StoredBot }) {
   const info = levelOf(bot);
+  if (isFriend(bot)) return <span className="gt-level level-human">Human</span>;
   return (
     <span className={`gt-level level-${info?.rank ?? 'custom'}`}>{info?.label ?? 'Your bot'}</span>
   );
@@ -916,7 +1231,7 @@ function OpponentSelect({
         onClick={() => (open ? setOpen(false) : show())}
         onKeyDown={onKey}
       >
-        <span className="gt-select-name">{current?.name ?? 'Choose a bot'}</span>
+        <span className="gt-select-name">{current?.name ?? 'Choose an opponent'}</span>
         <LevelChip bot={current} />
         <ChevronDown size={16} className="gt-select-chevron" />
       </button>
@@ -939,8 +1254,14 @@ function OpponentSelect({
                 {b.id === value && <Check size={15} className="gt-select-check" />}
               </span>
               <span className="gt-select-blurb">
-                {levelOf(b)?.blurb ?? 'A bot you built in the workshop.'}{' '}
-                <span className="bot-elo">Elo {Math.round(b.elo ?? 1200)}</span>
+                {isFriend(b) ? (
+                  'An open seat. Share the invite link once the game starts.'
+                ) : (
+                  <>
+                    {levelOf(b)?.blurb ?? 'A bot you built in the workshop.'}{' '}
+                    <span className="bot-elo">Elo {Math.round(b.elo ?? 1200)}</span>
+                  </>
+                )}
               </span>
             </li>
           ))}
@@ -970,12 +1291,13 @@ function Lobby({
       <section className="panel">
         <span className="step-label">OPPONENTS · {settings.opponents.length + 1} PLAYERS</span>
         <h2>Who are you playing?</h2>
+        <p className="muted">Add bots, or choose “A friend” to leave a seat for a person.</p>
         <div className="gt-seats">
           {settings.opponents.map((id, slot) => {
             return (
               <div className="gt-seat-row" key={slot}>
                 <span className={`gt-avatar tone-${slot + 1}`}>
-                  <Bot size={15} />
+                  {id === INVITED_HUMAN ? <User size={15} /> : <Bot size={15} />}
                 </span>
                 <OpponentSelect
                   label={`Opponent ${slot + 1}`}
@@ -1017,6 +1339,17 @@ function Lobby({
       <section className="panel">
         <span className="step-label">TABLE</span>
         <h2>Your seat</h2>
+        {settings.opponents.includes(INVITED_HUMAN) && (
+          <label className="gt-name">
+            <span className="step-label">YOUR NAME</span>
+            <input
+              value={settings.name}
+              maxLength={24}
+              placeholder="Host"
+              onChange={(e) => set({ name: e.target.value })}
+            />
+          </label>
+        )}
         <div className="segmented" role="group" aria-label="Turn order">
           {(
             [

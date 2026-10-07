@@ -251,6 +251,7 @@ export async function reconcileRun(kind: 'bot' | 'evaluation', id: string) {
         .update({
           status: 'completed',
           completed_games: result.report.games.length,
+          total_games: result.report.games.length,
           report_key: key,
           error: null,
         })

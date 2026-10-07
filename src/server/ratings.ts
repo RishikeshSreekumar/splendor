@@ -10,7 +10,7 @@ import {
   type Rating,
   type RatingChange,
 } from '../ratings';
-import type { PracticeSeat } from '../practice/types';
+import type { PracticeSeat, SeatRating } from '../practice/types';
 import type { GameState } from '../types';
 /** Abandoning before your third turn is free (misclicks, changed setup); later it is a loss. */
 export const FREE_ABANDON_TURNS = 3;
@@ -115,15 +115,26 @@ export async function withRatings<T extends { id: string }>(
     return { ...b, elo: r?.elo ?? INITIAL_ELO, ratedGames: r?.games ?? 0 };
   });
 }
-function practiceGame(user: string, seats: PracticeSeat[]) {
-  return seats.map((s): Participant =>
-    s.kind === 'human' ? { kind: 'user', id: user } : { kind: 'bot', id: s.botId },
+/** Account behind each human seat. Seats without one (local guests) are left unrated. */
+export type SeatUsers = Record<number, string>;
+/** The rated seats of a practice table: every bot, and each human seat with an account. */
+function practiceGame(users: SeatUsers, seats: PracticeSeat[]) {
+  return seats.flatMap((s, seat): { seat: number; participant: Participant }[] =>
+    s.kind === 'bot'
+      ? [{ seat, participant: { kind: 'bot', id: s.botId } }]
+      : users[seat]
+        ? [{ seat, participant: { kind: 'user', id: users[seat] } }]
+        : [],
   );
 }
-function notices(changes: RatingChange[] | null, user: string, seats: PracticeSeat[]) {
+function notices(
+  changes: RatingChange[] | null,
+  rated: ReturnType<typeof practiceGame>,
+  seats: PracticeSeat[],
+) {
   if (!changes?.length) return [];
-  const names = new Map<string, string>([[`user:${user}`, 'You']]);
-  for (const s of seats) if (s.kind === 'bot') names.set(`bot:${s.botId}`, s.name);
+  const names = new Map<string, string>();
+  for (const r of rated) names.set(ratingKey(r.participant), seats[r.seat].name);
   const line = changes
     .map((c) => {
       const d = Math.round(c.after) - Math.round(c.before);
@@ -132,36 +143,55 @@ function notices(changes: RatingChange[] | null, user: string, seats: PracticeSe
     .join(' · ');
   return [`Ratings: ${line}`];
 }
-/** Rates a finished practice game by final placement: the human and every bot. */
+export interface PracticeRating {
+  notices: string[];
+  /** Absent when the game was already rated (or is not finished). */
+  ratings?: SeatRating[];
+}
+/** Rates a finished practice game by final placement: the humans and every bot. */
 export async function rateFinishedPractice(
   id: string,
-  user: string,
+  users: SeatUsers,
   seats: PracticeSeat[],
   state: GameState,
-): Promise<string[]> {
-  if (state.status !== 'finished') return [];
+): Promise<PracticeRating> {
+  if (state.status !== 'finished') return { notices: [] };
+  const rated = practiceGame(users, seats);
+  const ranks = placements(state);
+  if (rated.length < 2) return { notices: [] };
   const changes = await applyRatings(`practice:${id}`, [
-    { participants: practiceGame(user, seats), ranks: placements(state) },
+    { participants: rated.map((r) => r.participant), ranks: rated.map((r) => ranks[r.seat]) },
   ]);
-  return notices(changes, user, seats);
+  if (!changes?.length) return { notices: [] };
+  const byKey = new Map(changes.map((c) => [c.key, c]));
+  return {
+    notices: notices(changes, rated, seats),
+    ratings: rated.flatMap(({ seat, participant }) => {
+      const c = byKey.get(ratingKey(participant));
+      return c ? [{ seat, before: c.before, after: c.after }] : [];
+    }),
+  };
 }
 export const abandonIsRated = (state: GameState, humanSeat: number) =>
   state.status === 'playing' && state.players[humanSeat].turns >= FREE_ABANDON_TURNS;
-/** An abandoned game after the free turns is the human's loss to every bot at the table. */
+/** An abandoned game after the free turns is the human's loss to everyone at the table. */
 export async function rateAbandonedPractice(
   id: string,
-  user: string,
+  users: SeatUsers,
   seats: PracticeSeat[],
   state: GameState,
   humanSeat: number,
 ): Promise<string[]> {
   if (!abandonIsRated(state, humanSeat)) return [];
+  const rated = practiceGame(users, seats);
+  const focus = rated.findIndex((r) => r.seat === humanSeat);
+  if (focus < 0 || rated.length < 2) return [];
   const changes = await applyRatings(`practice:${id}`, [
     {
-      participants: practiceGame(user, seats),
-      ranks: seats.map((_, s) => (s === humanSeat ? 1 : 0)),
-      focus: humanSeat,
+      participants: rated.map((r) => r.participant),
+      ranks: rated.map((r) => (r.seat === humanSeat ? 1 : 0)),
+      focus,
     },
   ]);
-  return notices(changes, user, seats);
+  return notices(changes, rated, seats);
 }

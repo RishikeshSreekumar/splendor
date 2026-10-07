@@ -889,6 +889,18 @@ progress {
   width: 100%;
   accent-color: #91775b;
 }
+.table-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.table-progress progress {
+  width: 72px;
+}
+.table-progress.muted {
+  color: var(--muted);
+}
 .design-intro {
   background: #efe9dd;
 }
