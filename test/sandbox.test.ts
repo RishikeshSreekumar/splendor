@@ -85,6 +85,17 @@ test('infinite loops during move, constructor and module initialization are boun
     assert.ok(Date.now() - start < 3000);
   }
 });
+test('a tiny initialization budget times the bot out instead of crashing platform setup', async () => {
+  // The budget once started before the sandbox's own setup, so a slow host crashed the worker.
+  for (let i = 0; i < 3; i++)
+    await run(
+      source('return view.legalActions[0];'),
+      async (r) => {
+        await r.ready.catch((error) => assert.match(String(error), /TIMEOUT/));
+      },
+      { initializationMs: 1 },
+    );
+});
 test('throws, undefined, unresolved promises, cycles, oversized outputs and hostile getters become bounded faults', async () => {
   for (const body of [
     "throw new Error('secret');",

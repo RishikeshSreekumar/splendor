@@ -16,7 +16,8 @@ const QuickJS = await getQuickJS();
 const runtime = QuickJS.newRuntime();
 runtime.setMemoryLimit(data.memoryMb * 1024 * 1024);
 runtime.setMaxStackSize(512 * 1024);
-let deadline = performance.now() + data.initializationMs;
+// The platform's own setup is never interrupted; the bot's budget starts with its module.
+let deadline = Infinity;
 runtime.setInterruptHandler(() => performance.now() >= deadline);
 runtime.setModuleLoader((name) => {
   if (name === 'splendor') return data.sdkSource;
@@ -53,6 +54,7 @@ try {
   evaluate(
     `globalThis.Date = undefined; Math.random = (${random.toString()})(${JSON.stringify(data.seed)});`,
   ).dispose();
+  deadline = performance.now() + data.initializationMs;
   evaluate(
     `
     import Player from 'submission';
