@@ -257,7 +257,16 @@ export function Arena() {
                       {j.config.clockConfig.incrementMs / 1000}
                     </td>
                     <td>
-                      {j.completedGames} / {j.totalGames}
+                      {j.status === 'completed' ? (
+                        <span className="table-progress">{j.completedGames} games</span>
+                      ) : j.status === 'running' && j.completedGames > 0 ? (
+                        <span className="table-progress">
+                          <progress value={j.completedGames} max={j.totalGames} />
+                          {j.completedGames} / {j.totalGames}
+                        </span>
+                      ) : (
+                        <span className="table-progress muted">{j.totalGames} games</span>
+                      )}
                     </td>
                     <td>
                       <span className={`job-status ${j.status}`}>{j.status}</span>

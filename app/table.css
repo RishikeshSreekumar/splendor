@@ -1497,7 +1497,7 @@ kbd {
 }
 .gt-ranking li {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto 1fr auto auto;
   grid-template-rows: auto auto;
   column-gap: 10px;
   align-items: center;
@@ -1520,6 +1520,43 @@ kbd {
   grid-row: 1 / span 2;
   font-family: Georgia, serif;
   font-size: 22px;
+}
+.gt-ranking span.gt-elo {
+  grid-column: 4;
+  grid-row: 1 / span 2;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  min-width: 58px;
+  color: var(--ink, inherit);
+  font-size: var(--t-sm);
+}
+.gt-ranking .gt-elo strong {
+  font-variant-numeric: tabular-nums;
+  font-size: 15px;
+}
+.gt-ranking .gt-elo em {
+  font-style: normal;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  padding: 0 6px;
+  border-radius: 999px;
+  animation: gt-pop-in 0.3s ease-out 0.4s both;
+}
+.gt-ranking .gt-elo em.up {
+  color: #1f7a48;
+  background: rgba(47, 154, 95, 0.14);
+}
+.gt-ranking .gt-elo em.down {
+  color: #b42e2e;
+  background: rgba(207, 59, 59, 0.12);
+}
+.gt-ranking .gt-elo em.even {
+  color: var(--muted);
+}
+.gt-elo-note {
+  margin: -12px 0 18px;
+  font-size: var(--t-sm);
 }
 .gt-modal-actions {
   display: flex;
@@ -1591,6 +1628,34 @@ kbd {
 .gt-level.level-custom {
   background: #e7e5f2;
   color: #4b4778;
+}
+.gt-level.level-human {
+  background: #dcebf5;
+  color: #1f5a80;
+}
+.gt-name,
+.gt-join label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 14px;
+}
+.gt-join {
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Shared table invite */
+.gt-invite {
+  flex-wrap: wrap;
+}
+.gt-invite code {
+  flex: 1 1 220px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  user-select: all;
 }
 
 /* Custom select */

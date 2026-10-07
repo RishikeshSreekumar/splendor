@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { createGame, legalActions, observe, applyAction, assertInvariants } from '../src/engine';
 import { ChessClock } from '../src/clock';
 import { BotFault } from '../src/sandbox';
-import { humanStep, playBots, type BotDriver } from '../src/practice/bot-turns';
+import { humanStep, playBots, stepFor, type BotDriver } from '../src/practice/bot-turns';
 import { arrangeSeats, chooseHumanSeat } from '../src/practice/types';
 import {
   bagAction,
@@ -15,6 +15,7 @@ import {
   reserveAction,
 } from '../src/practice/moves';
 import { practiceTurn } from '../src/server/practice-turn';
+import { PracticeSession } from '../src/server/practice';
 import { simulate } from '../src/simulation';
 import { tokens } from '../src/catalog';
 import type { GameState, Observation } from '../src/types';
@@ -170,6 +171,113 @@ test('the Modal practice turn runs the human move and every bot reply in one cal
   assert.equal(opening.steps.length, 2);
 });
 
+test('a split move answers with the human step alone, then advance plays the bots', async () => {
+  const greedy = await source('greedy');
+  const bot = (id: string) => ({
+    id,
+    name: 'Greedy',
+    source: greedy,
+    sourceHash: id,
+    baseline: true,
+    createdAt: '',
+  });
+  const session = new PracticeSession(
+    [bot('a'), bot('b')],
+    { opponents: [], order: 'first' },
+    {
+      initialMs: 60000,
+      incrementMs: 1000,
+    },
+  );
+  try {
+    const opening = await session.initialize();
+    assert.equal(opening.pending, false);
+    const mine = await session.act(opening.view.legalActions[0], opening.revision, true);
+    assert.deepEqual(
+      mine.steps.map((s) => s.seat),
+      [0],
+    );
+    assert.equal(mine.pending, true);
+    assert.equal(mine.view.currentPlayer, 1);
+    await assert.rejects(session.act(mine.view.legalActions[0] ?? {}, mine.revision, true));
+    await assert.rejects(session.advanceBots(opening.revision), /board changed/);
+    const replies = await session.advanceBots(mine.revision);
+    assert.deepEqual(
+      replies.steps.map((s) => s.seat),
+      [1, 2],
+    );
+    assert.equal(replies.pending, false);
+    assert.equal(replies.view.currentPlayer, 0);
+  } finally {
+    await session.close();
+  }
+});
+test('bots stop at every human seat of a shared table', async () => {
+  const result = await playBots({
+    state: createGame({ players: 4, seed: 'shared' }),
+    clock: new ChessClock(4),
+    humanSeat: 3,
+    humanSeats: [2, 3],
+    drivers: [first, first, null, null],
+    disabled: new Set(),
+  });
+  assert.equal(result.state.currentPlayer, 2);
+  assert.deepEqual(
+    result.history.map((e) => e.seat),
+    [0, 1],
+  );
+  assert.equal(result.steps[0].view.you, 3);
+  assert.equal(stepFor(result.history[0], 2).view.you, 2);
+});
+
+test('a friend joins an open seat and plays with their seat token', async () => {
+  const greedy = await source('greedy');
+  const session = new PracticeSession(
+    [
+      null,
+      { id: 'g', name: 'Greedy', source: greedy, sourceHash: 'g', baseline: true, createdAt: '' },
+    ],
+    { opponents: [], order: 'first', name: 'Ana' },
+    { initialMs: 60000, incrementMs: 1000 },
+  );
+  try {
+    const opening = await session.initialize();
+    assert.deepEqual(opening.seats[1], { kind: 'human', name: 'Open seat', open: true });
+    const hostMove = await session.act(opening.view.legalActions[0], opening.revision, true);
+    // The open seat is next: nobody moves for it, and the bots do not run.
+    assert.equal(hostMove.view.currentPlayer, 1);
+    assert.equal(hostMove.pending, false);
+    await assert.rejects(
+      session.act(hostMove.view.legalActions[0] ?? {}, hostMove.revision, true),
+      /Wait for your turn/,
+    );
+    const joined = session.join('Bo');
+    assert.equal(joined.humanSeat, 1);
+    assert.ok(joined.seatToken);
+    assert.deepEqual(joined.seats[1], { kind: 'human', name: 'Bo' });
+    assert.throws(() => session.join('Cy'), /no open seat/);
+    assert.throws(() => session.seatOf('not-a-real-token'), /not seated/);
+    const seat = session.seatOf(joined.seatToken);
+    const friendMove = await session.act(joined.view.legalActions[0], joined.revision, true, seat);
+    assert.equal(friendMove.pending, true);
+    const replies = await session.advanceBots(friendMove.revision, seat);
+    assert.deepEqual(
+      replies.steps.map((s) => s.seat),
+      [2],
+    );
+    // The host polls from the board it last showed and sees both later moves from its seat.
+    const polled = session.current(session.seatOf(), hostMove.revision);
+    assert.equal(polled.humanSeat, 0);
+    assert.deepEqual(
+      polled.steps.map((s) => s.seat),
+      [1, 2],
+    );
+    assert.ok(polled.steps.every((s) => s.view.you === 0));
+    assert.ok(polled.view.legalActions.length > 0, 'the host is to move again');
+  } finally {
+    await session.close();
+  }
+});
 test('Strategist plays fault-free and beats Greedy across paired seats', async () => {
   const strategist = { id: 'strategist', source: await source('strategist') };
   const greedy = { id: 'greedy', source: await source('greedy') };

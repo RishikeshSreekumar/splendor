@@ -505,10 +505,16 @@ export const TOOLS: Tool[] = [
         'Provide exactly one of actionIndex or action',
       ),
     async run({ actionIndex, action, gameId }, context) {
-      const game = await currentGame(context);
+      let game = await currentGame(context);
       if (!game) throw new Error('You have no unfinished game. Call start_game.');
       if (gameId && gameId !== game.id) throw new Error(`Your current game is ${game.id}`);
       if (game.busy) throw new Error('A move is still being computed; call get_game shortly.');
+      // A browser move can leave the bots' replies pending; run them first.
+      if (game.pending)
+        game = await api<PracticeView>(context, playRoute, '/api/play', {
+          method: 'POST',
+          body: { type: 'advance', id: game.id, revision: game.revision },
+        });
       if (game.view.currentPlayer !== game.humanSeat) throw new Error('It is not your turn');
       const chosen =
         actionIndex === undefined
