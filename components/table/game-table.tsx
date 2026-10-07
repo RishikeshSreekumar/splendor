@@ -124,7 +124,7 @@ export function GameTable({
   freshCards,
   timedSeats,
   aside,
-  flightMs = 750,
+  flightMs = 1000,
 }: {
   view: Observation;
   seats: SeatLabel[];

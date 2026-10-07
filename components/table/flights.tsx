@@ -17,6 +17,8 @@ export type FlightPlan = { from: string; to: string } & (
 
 /** Every piece that moved between two consecutive views, in the order to show them. */
 export function planFlights(a: Observation, b: Observation): FlightPlan[] {
+  // A different game (new game, another replay): nothing moved, the table was reset.
+  if (b.turn < a.turn || b.players.length !== a.players.length) return [];
   const out: FlightPlan[] = [];
   const nobles: FlightPlan[] = [];
   const ids = (p: PlayerView) => new Set(p.reserved.flatMap((r) => (r.card ? [r.card.id] : [])));
@@ -119,7 +121,7 @@ export function useFlights(
       plans?.length &&
       !matchMedia('(prefers-reduced-motion: reduce)').matches
     ) {
-      const stagger = Math.min(110, duration / 5);
+      const stagger = Math.min(140, duration / 6);
       const added = plans.flatMap((plan) => {
         const from = boxes.current.get(plan.from);
         const to = now.get(plan.to);
@@ -158,32 +160,54 @@ function FlyingPiece({
   const ref = useRef<HTMLDivElement>(null);
   const { from, to, plan, delay } = flight;
   useLayoutEffect(() => {
+    const el = ref.current!;
     const s = Math.min(to.w / from.w, to.h / from.h, 1.4);
     const tx = to.x + (to.w - from.w * s) / 2;
     const ty = to.y + (to.h - from.h * s) / 2;
-    // Arc over the table rather than sliding straight across it.
-    const lift = Math.min(90, Math.hypot(tx - from.x, ty - from.y) * 0.25);
-    const mx = (from.x + tx) / 2;
-    const my = Math.min(from.y, ty) - lift;
-    const anim = ref.current!.animate(
-      [
-        { transform: `translate(${from.x}px, ${from.y}px) scale(1)`, opacity: 0.4 },
-        {
-          transform: `translate(${from.x}px, ${from.y - 8}px) scale(1.12)`,
-          opacity: 1,
-          offset: 0.12,
-        },
-        {
-          transform: `translate(${mx}px, ${my}px) scale(${(1.15 + s) / 2})`,
-          opacity: 1,
-          offset: 0.55,
-        },
-        { transform: `translate(${tx}px, ${ty}px) scale(${s})`, opacity: 1, offset: 0.92 },
-        { transform: `translate(${tx}px, ${ty}px) scale(${s})`, opacity: 0 },
-      ],
-      { duration, delay, easing: 'cubic-bezier(.4,0,.2,1)', fill: 'both' },
+    // Lift off the board, travel along an arc over the table, then drop into place.
+    // The path is sampled by hand so the piece moves for the whole flight rather than
+    // racing ahead under a single easing curve.
+    const lift = 18;
+    const sx = from.x;
+    const sy = from.y - lift;
+    const arc = Math.min(160, 40 + Math.hypot(tx - sx, ty - sy) * 0.3);
+    const cx = (sx + tx) / 2;
+    const cy = Math.min(sy, ty) - arc;
+    const big = 1.3;
+    const ease = (t: number) => (t < 0.5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2);
+    const at = (x: number, y: number, k: number) => `translate(${x}px, ${y}px) scale(${k})`;
+    const frames: Keyframe[] = [
+      { transform: at(from.x, from.y, 1), offset: 0 },
+      { transform: at(sx, sy, big), offset: 0.14 },
+    ];
+    const steps = 24;
+    for (let i = 1; i <= steps; i++) {
+      const t = ease(i / steps);
+      const u = 1 - t;
+      frames.push({
+        transform: at(
+          u * u * sx + 2 * u * t * cx + t * t * tx,
+          u * u * sy + 2 * u * t * cy + t * t * ty,
+          big + (s * 1.15 - big) * t,
+        ),
+        offset: 0.14 + 0.72 * (i / steps),
+      });
+    }
+    frames.push(
+      { transform: at(tx, ty, s), opacity: 1, offset: 0.95 },
+      { transform: at(tx, ty, s), opacity: 0, offset: 1 },
     );
-    anim.onfinish = onDone;
+    const anim = el.animate(frames, { duration, delay, easing: 'linear', fill: 'both' });
+    anim.onfinish = () => {
+      // Make the arrival felt: the spot the piece landed on pulses.
+      document
+        .querySelector<HTMLElement>(`[data-fly="${plan.to}"]`)
+        ?.animate(
+          [{ transform: 'scale(1)' }, { transform: 'scale(1.3)' }, { transform: 'scale(1)' }],
+          { duration: 320, easing: 'ease-out' },
+        );
+      onDone();
+    };
     return () => anim.cancel();
     // A flight is planned once; later renders must not restart it.
     // eslint-disable-next-line react-hooks/exhaustive-deps

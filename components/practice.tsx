@@ -36,9 +36,9 @@ import { GameTable, type TableControls } from './table/game-table';
 import { COLORS, GEMS, GEM_NAMES, Token } from './table/pieces';
 import { StepText } from './table/step-text';
 type Speed = 'fast' | 'normal' | 'slow';
-const STEP_DELAY: Record<Speed, number> = { fast: 900, normal: 1700, slow: 2600 };
+const STEP_DELAY: Record<Speed, number> = { fast: 1300, normal: 2300, slow: 3400 };
 /** Travel time for gems and cards moving between the board and a player. */
-const FLIGHT_MS: Record<Speed, number> = { fast: 500, normal: 850, slow: 1200 };
+const FLIGHT_MS: Record<Speed, number> = { fast: 700, normal: 1100, slow: 1600 };
 const LEVELS: Record<string, { label: string; blurb: string; rank: number }> = {
   Random: { label: 'Beginner', blurb: 'Plays any legal move.', rank: 0 },
   Greedy: { label: 'Intermediate', blurb: 'Buys what it can, chases near cards.', rank: 1 },
