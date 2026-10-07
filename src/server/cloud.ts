@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { timingSafeEqual } from 'node:crypto';
 import { AuthenticationError } from './http';
+import { isApiToken, tokenOwner } from './api-tokens';
 export const isCloud = () => process.env.SPLENDOR_STORAGE === 'supabase';
 export function secret(name: string): string {
   const value = process.env[name];
@@ -12,14 +13,35 @@ export function database() {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 }
+/** The single account of local SQLite mode. */
+export const LOCAL_OWNER = '00000000-0000-4000-8000-000000000001';
 export async function owner(request: Request): Promise<string> {
-  if (!isCloud()) return '00000000-0000-4000-8000-000000000001';
+  if (!isCloud()) return LOCAL_OWNER;
   return authenticatedOwner(request);
 }
-/** Submissions always require a verified account, including in local storage mode. */
+const bearer = (request: Request) =>
+  request.headers.get('authorization')?.match(/^Bearer (.+)$/)?.[1];
+/**
+ * Submissions always require a verified account, including in local storage mode. Accepts a
+ * Supabase session or a personal access token (`spl_…`) issued to MCP clients.
+ */
 export async function authenticatedOwner(request: Request): Promise<string> {
-  const token = request.headers.get('authorization')?.match(/^Bearer (.+)$/)?.[1];
+  const token = bearer(request);
   if (!token) throw new AuthenticationError();
+  if (isApiToken(token)) {
+    const user = isCloud() ? await tokenOwner(token) : undefined;
+    if (!user) throw new AuthenticationError();
+    return user;
+  }
+  return sessionUser(token);
+}
+/** Account management requires a browser session: a leaked API token cannot mint more. */
+export async function sessionOwner(request: Request): Promise<string> {
+  const token = bearer(request);
+  if (!token || isApiToken(token)) throw new AuthenticationError();
+  return sessionUser(token);
+}
+async function sessionUser(token: string): Promise<string> {
   const { data, error } = await database().auth.getUser(token);
   if (error || !data.user) throw new AuthenticationError();
   return data.user.id;

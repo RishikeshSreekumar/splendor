@@ -22,6 +22,7 @@ import {
   InvalidAction,
 } from './engine';
 import { random } from './random';
+import { placements } from './ratings';
 export const digest = (value: unknown): string =>
   createHash('sha256')
     .update(typeof value === 'string' ? value : JSON.stringify(value))
@@ -44,8 +45,6 @@ export async function simulate({
   if (!Array.isArray(bots) || bots.length < 2 || bots.length > 4)
     throw new RangeError('Expected 2–4 bots');
   if (!['ranked', 'practice'].includes(mode)) throw new RangeError('Unknown evaluation mode');
-  if (mode === 'ranked' && bots.length !== 2)
-    throw new RangeError('Ranked v1 supports two players');
   if (!Number.isInteger(maxTurns) || maxTurns < 1 || maxTurns > 10000)
     throw new RangeError('maxTurns must be 1–10000');
   if (
@@ -63,6 +62,15 @@ export async function simulate({
   const fallbackRng = random(`${seed}:fallback`),
     runners: BotRunner[] = [];
   let result: MatchResult | null = null;
+  /** Ranked seats eliminated by a fault, in order. They keep moving by fallback, unranked. */
+  const forfeited: number[] = [];
+  const survivors = () => bots.flatMap((_, s) => (forfeited.includes(s) ? [] : [s]));
+  const forfeitResult = (): MatchResult => ({
+    reason: 'forfeit',
+    winners: survivors(),
+    ranks: placements(state, forfeited),
+    ratingEligible: true,
+  });
   const recordFault = (
     seat: number,
     code: string,
@@ -99,13 +107,11 @@ export async function simulate({
       }
     });
     if (mode === 'ranked' && disabled.some(Boolean)) {
-      result = disabled.every(Boolean)
-        ? { reason: 'both_failed', winners: [], ratingEligible: false }
-        : {
-            reason: 'forfeit',
-            winners: disabled.flatMap((v, i) => (v ? [] : [i])),
-            ratingEligible: true,
-          };
+      disabled.forEach((v, seat) => v && forfeited.push(seat));
+      if (disabled.every(Boolean))
+        result = { reason: 'both_failed', winners: [], ratingEligible: false };
+      // With two or more healthy bots left, a multiplayer table plays on.
+      else if (survivors().length === 1) result = forfeitResult();
     }
     while (!result && state.status === 'playing') {
       if (state.turn >= maxTurns) {
@@ -156,8 +162,11 @@ export async function simulate({
       }
       if (!next) {
         if (mode === 'ranked') {
-          result = { reason: 'forfeit', winners: [1 - seat], ratingEligible: true };
-          break;
+          if (!forfeited.includes(seat)) forfeited.push(seat);
+          if (survivors().length <= 1) {
+            result = forfeitResult();
+            break;
+          }
         }
         assisted = true;
         action = actions[Math.floor(fallbackRng() * actions.length)];
@@ -181,7 +190,15 @@ export async function simulate({
       });
       state = next;
     }
-    result ??= { reason: 'completed', winners: state.winners, ratingEligible: mode === 'ranked' };
+    if (!result) {
+      const ranks = placements(state, forfeited);
+      result = {
+        reason: 'completed',
+        winners: forfeited.length ? ranks.flatMap((r, s) => (r === 0 ? [s] : [])) : state.winners,
+        ranks,
+        ratingEligible: mode === 'ranked',
+      };
+    }
     return {
       formatVersion: 2,
       rulesVersion: RULES_VERSION,

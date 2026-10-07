@@ -1,3 +1,5 @@
+import { withRatings } from '@/src/server/ratings';
+import { enforceRateLimit, RATE_LIMITS } from '@/src/server/rate-limit';
 import { botSecretsSchema } from '@/src/server/bot-secrets';
 import { z } from 'zod';
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -14,16 +16,17 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 export async function GET(request: Request) {
   try {
-    if (!isCloud()) return Response.json(getStore().listBots());
-    const user = await optionalOwner(request),
-      store = new CloudStore();
+    const user = await optionalOwner(request);
+    await enforceRateLimit(request, RATE_LIMITS.statusRead, user);
+    if (!isCloud()) return Response.json(await withRatings(getStore().listBots()));
+    const store = new CloudStore();
     let bots = await store.listBots(user);
     for (const b of bots
       .filter((b) => b.ownerId === user && b.qualification === 'pending')
       .slice(0, 2))
       await reconcileRun('bot', b.id);
     bots = await store.listBots(user);
-    return Response.json(bots);
+    return Response.json(await withRatings(bots));
   } catch (error) {
     return apiError(error);
   }
@@ -32,6 +35,7 @@ export async function POST(request: Request) {
   try {
     mutationOrigin(request);
     const user = await authenticatedOwner(request);
+    await enforceRateLimit(request, RATE_LIMITS.botSubmit, user);
     const { name, source, files, secrets } = z
       .object({
         name: z.string().trim().min(1).max(50),

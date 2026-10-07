@@ -1,3 +1,4 @@
+import { enforceRateLimit, RATE_LIMITS } from '@/src/server/rate-limit';
 import { isCloud, owner, optionalOwner } from '@/src/server/cloud';
 import { CloudStore } from '@/src/server/cloud-store';
 import { launchEvaluation, reconcileRun } from '@/src/server/modal-jobs';
@@ -12,6 +13,7 @@ export async function GET(request: Request) {
   if (isCloud()) {
     try {
       const user = await optionalOwner(request);
+      await enforceRateLimit(request, RATE_LIMITS.statusRead, user);
       if (!user) return Response.json([]);
       const store = new CloudStore();
       const jobs = await store.listJobs(user);
@@ -23,6 +25,11 @@ export async function GET(request: Request) {
     } catch (error) {
       return apiError(error);
     }
+  }
+  try {
+    await enforceRateLimit(request, RATE_LIMITS.statusRead, await owner(request));
+  } catch (error) {
+    return apiError(error);
   }
   getQueue();
   return Response.json(getStore().listJobs());
@@ -39,6 +46,8 @@ export async function POST(request: Request) {
         clockConfig: clockSchema,
       })
       .parse(await jsonBody(request));
+    // Each launch reserves a large sandbox: charged before any lookup, with escalating backoff.
+    await enforceRateLimit(request, RATE_LIMITS.evaluationCreate, user);
     if (new Set(config.botIds).size !== config.botIds.length)
       throw new Error('Select distinct bot versions');
     const bots = isCloud() ? await new CloudStore().listBots(user) : getStore().listBots();

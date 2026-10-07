@@ -1,3 +1,4 @@
+import { enforceRateLimit, RATE_LIMITS } from '@/src/server/rate-limit';
 import { isCloud, owner } from '@/src/server/cloud';
 import { CloudStore } from '@/src/server/cloud-store';
 import { getStore } from '@/src/server/store';
@@ -12,9 +13,9 @@ export async function GET(
 ) {
   try {
     const { id, index } = await params,
-      job = isCloud()
-        ? await new CloudStore().getJob(id, await owner(_request))
-        : getStore().getJob(id),
+      user = await owner(_request);
+    await enforceRateLimit(_request, RATE_LIMITS.statusRead, user);
+    const job = isCloud() ? await new CloudStore().getJob(id, user) : getStore().getJob(id),
       n = Number(index);
     if (!job?.report || !Number.isInteger(n) || n < 0 || n >= job.report.games.length)
       return Response.json({ error: 'Completed game not found' }, { status: 404 });

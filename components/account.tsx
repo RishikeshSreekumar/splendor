@@ -3,6 +3,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { browserAuth } from '@/src/client-auth';
 import { ErrorNotice, errorMessage } from './ui';
+import { McpAccess } from './mcp-access';
 export function Account() {
   const router = useRouter();
   const [email, setEmail] = useState(''),
@@ -127,6 +128,7 @@ export function Account() {
           </>
         )}
       </section>
+      {cloud && current && <McpAccess />}
     </>
   );
 }

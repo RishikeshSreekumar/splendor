@@ -5,6 +5,8 @@ import { database, getArtifact, putArtifact, secret } from './cloud';
 import type { BotArtifact } from './cloud-store';
 import type { BotDefinition, ClockConfig, EvaluationReport, Mode } from '../types';
 import { QUALIFICATION_BASELINES } from './baselines';
+import { applyRatings } from './ratings';
+import { evaluationGames } from '../ratings';
 import imageConfig from '../../modal-image.json';
 export interface RunInput {
   bots: BotDefinition[];
@@ -241,6 +243,9 @@ export async function reconcileRun(kind: 'bot' | 'evaluation', id: string) {
         .eq('qualification', 'pending');
       if (e) throw e;
     } else {
+      // Ranked games feed the global ladder once per evaluation, before the job is marked
+      // complete: a failure here is retried by the next reconciliation.
+      await applyRatings(`evaluation:${id}`, evaluationGames(result.report));
       const { error: e } = await db
         .from(table)
         .update({

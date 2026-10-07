@@ -31,7 +31,7 @@ import {
   reserveAction,
 } from '@/src/practice/moves';
 import type { Action, Card, Gem, Observation } from '@/src/types';
-import { api, ErrorNotice, errorMessage } from './ui';
+import { api, ApiRequestError, ErrorNotice, errorMessage } from './ui';
 import { GameTable, type TableControls } from './table/game-table';
 import { COLORS, GEMS, GEM_NAMES, Token } from './table/pieces';
 import { StepText } from './table/step-text';
@@ -126,13 +126,22 @@ export function Practice() {
       })
       .catch((e) => setError(errorMessage(e)));
   }, []);
-  const sessionId = session?.id;
-  useEffect(
-    () => () => {
-      if (sessionId) void api('/api/play', { type: 'close', id: sessionId }).catch(() => {});
-    },
-    [sessionId],
-  );
+  // One unfinished game per account: pick it up again, whether it began here or from an agent.
+  useEffect(() => {
+    api<{ game: PracticeView | null }>('/api/play')
+      .then(({ game }) => {
+        if (!game) return;
+        setSession(game);
+        setShown({ view: game.view, acting: null, fresh: new Set() });
+        setSetupOpen(false);
+        setNotices([
+          game.busy
+            ? 'Resumed your unfinished game. A move is still finishing; reload in a moment.'
+            : 'Resumed your unfinished game.',
+        ]);
+      })
+      .catch(() => {});
+  }, []);
   const clearSelection = useCallback(() => {
     setTake({});
     setRet({});
@@ -174,18 +183,40 @@ export function Practice() {
   );
   async function start() {
     if (!settings.opponents.length) return;
+    const live = session?.view;
+    if (
+      live?.status === 'playing' &&
+      live.players[session!.humanSeat].turns >= 3 &&
+      !window.confirm('Starting over abandons this game, which counts as a rated loss. Continue?')
+    )
+      return;
     saveSettings(settings);
     setBusy(true);
     setError('');
     playToken.current++;
     try {
-      if (session) await api('/api/play', { type: 'close', id: session.id }).catch(() => {});
-      const next = await api<PracticeView>('/api/play', {
-        type: 'new',
-        clockConfig: { initialMs: 60000, incrementMs: 1000 },
-        opponents: settings.opponents,
-        order: settings.order,
-      });
+      const request = (replace: boolean) =>
+        api<PracticeView>('/api/play', {
+          type: 'new',
+          clockConfig: { initialMs: 60000, incrementMs: 1000 },
+          opponents: settings.opponents,
+          order: settings.order,
+          replace,
+        });
+      let next: PracticeView;
+      try {
+        // Starting over from this table abandons the game it shows.
+        next = await request(Boolean(session));
+      } catch (e) {
+        if (
+          !(e instanceof ApiRequestError && e.status === 409 && e.data.activeGameId) ||
+          !window.confirm(
+            'You have an unfinished game elsewhere. Abandon it (a rated loss after your third turn) and start this one?',
+          )
+        )
+          throw e;
+        next = await request(true);
+      }
       clearSelection();
       setLog([]);
       setCaption(null);
@@ -898,7 +929,8 @@ function OpponentSelect({
                 {b.id === value && <Check size={15} className="gt-select-check" />}
               </span>
               <span className="gt-select-blurb">
-                {levelOf(b)?.blurb ?? 'A bot you built in the workshop.'}
+                {levelOf(b)?.blurb ?? 'A bot you built in the workshop.'}{' '}
+                <span className="bot-elo">Elo {Math.round(b.elo ?? 1200)}</span>
               </span>
             </li>
           ))}

@@ -35,6 +35,8 @@ test('submission verifies the bearer token with Supabase and uses the verified i
   let valid = false;
   let calls = 0;
   t.mock.method(globalThis, 'fetch', async (input: string | URL | Request, init?: RequestInit) => {
+    if (String(input).endsWith('/rest/v1/rpc/splendor_rate_limit'))
+      return Response.json([{ allowed: true, retry_after_seconds: 0 }]);
     assert.equal(String(input), 'https://auth.example/auth/v1/user');
     assert.equal(new Headers(init?.headers).get('authorization'), 'Bearer test-token');
     calls++;

@@ -4,6 +4,36 @@ export class AuthenticationError extends Error {
     super('Sign in to continue');
   }
 }
+/** An error with an HTTP status and extra JSON fields for clients to act on. */
+export class HttpError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly details: Record<string, unknown> = {},
+    readonly headers: Record<string, string> = {},
+  ) {
+    super(message);
+  }
+}
+export class RateLimitError extends HttpError {
+  constructor(
+    readonly policy: string,
+    readonly retryAfterSeconds: number,
+    escalates = true,
+  ) {
+    super(
+      `Rate limit reached for ${policy}. Retry in ${retryAfterSeconds}s${escalates ? '; retrying sooner extends the wait' : ''}.`,
+      429,
+      { policy, retryAfterSeconds },
+      { 'retry-after': String(retryAfterSeconds) },
+    );
+  }
+}
+/** The caller's address. Vercel overwrites these headers, so clients cannot forge them there. */
+export function clientIp(request: Request): string {
+  const forwarded = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim();
+  return request.headers.get('x-real-ip')?.trim() || forwarded || 'local';
+}
 export const clockSchema = z.object({
   initialMs: z.number().int().min(1000).max(3600000),
   incrementMs: z.number().int().min(0).max(60000),
@@ -52,6 +82,11 @@ export function apiError(error: unknown, status = 400): Response {
       : error instanceof Error
         ? error.message
         : 'Request failed';
+  if (error instanceof HttpError)
+    return Response.json(
+      { ...error.details, error: message },
+      { status: error.status, headers: error.headers },
+    );
   return Response.json(
     { error: message },
     { status: error instanceof AuthenticationError ? 401 : status },

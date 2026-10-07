@@ -9,13 +9,10 @@ import type {
   RunnerOptions,
 } from './types';
 import { simulate, digest } from './simulation';
-export function eloPair(a: number, b: number, score: number, k = 32) {
-  if (![a, b, score, k].every(Number.isFinite) || score < 0 || score > 1 || k <= 0)
-    throw new RangeError('Invalid Elo input');
-  const expected = 1 / (1 + 10 ** ((b - a) / 400));
-  const change = k * (score - expected);
-  return [a + change, b - change];
-}
+import { eloPair, recordRanks } from './ratings';
+import { fixtureTables } from './fixtures';
+export * from './fixtures';
+export { eloPair } from './ratings';
 export function winInterval(wins: number, games: number) {
   if (!games) return [0, 1];
   const z = 1.96,
@@ -76,64 +73,79 @@ export async function evaluate({
   );
   const games: GameRecord[] = [];
   for (let round = 0; round < pairs; round++) {
-    for (let i = 0; i < ordered.length; i++)
-      for (let j = i + 1; j < ordered.length; j++) {
-        const a = ordered[i],
-          b = ordered[j],
-          fixture: GameRecord[] = [];
-        const gameSeed = digest(`${seed}:${round}:${a.id}:${b.id}`);
-        for (const seating of [
-          [a, b],
-          [b, a],
-        ]) {
-          const game = await simulate({
-            bots: seating,
-            seed: digest(`${gameSeed}:game:${fixture.length}`),
-            mode,
-            maxTurns,
-            runnerOptions,
-            clockConfig,
-          });
-          fixture.push(game);
-          games.push(game);
+    for (const table of fixtureTables(ordered)) {
+      const fixture: GameRecord[] = [];
+      // For two bots this is the original `${seed}:${round}:${a}:${b}` fixture seed.
+      const tableSeed = digest(`${seed}:${round}:${table.map((b) => b.id).join(':')}`);
+      // Rotations give every bot every seat once, with a fresh deal each game.
+      for (let r = 0; r < table.length; r++) {
+        const seating = table.map((_, i) => table[(i + r) % table.length]);
+        const game = await simulate({
+          bots: seating,
+          seed: digest(`${tableSeed}:game:${fixture.length}`),
+          mode,
+          maxTurns,
+          runnerOptions,
+          clockConfig,
+        });
+        fixture.push(game);
+        games.push(game);
+        game.bots.forEach((bot, seat) => {
+          const row = rows.get(bot.id)!;
+          row.games++;
+          row.faults += game.faults[seat];
+          row.decisions += game.decisions[seat];
+          row.assistedDecisions += game.log.filter(
+            (e) => e.kind === 'action' && e.seat === seat && e.assisted,
+          ).length;
+          if (mode === 'ranked' && game.faults[seat] > 0) row.forfeits++;
+          if (!game.result.ratingEligible) row.unratedGames++;
+        });
+        await onGame(game, games.length);
+      }
+      // An incomplete fixture never changes ratings, avoiding seat-order bias.
+      if (fixture.every((g) => g.result.ratingEligible)) {
+        const score = new Map<string, number>();
+        for (const game of fixture) {
+          const ranks = recordRanks(game),
+            best = Math.min(...ranks),
+            shared = ranks.filter((r) => r === best).length > 1;
           game.bots.forEach((bot, seat) => {
             const row = rows.get(bot.id)!;
-            row.games++;
-            row.faults += game.faults[seat];
-            row.decisions += game.decisions[seat];
-            row.assistedDecisions += game.log.filter(
-              (e) => e.kind === 'action' && e.seat === seat && e.assisted,
-            ).length;
-            if (game.result.reason === 'forfeit' && !game.result.winners.includes(seat))
-              row.forfeits++;
-            if (!game.result.ratingEligible) row.unratedGames++;
-          });
-          await onGame(game, games.length);
-        }
-        // An incomplete/capped pair never changes ratings, avoiding first-seat bias.
-        if (fixture.every((g) => g.result.ratingEligible)) {
-          let aScore = 0;
-          for (const game of fixture) {
-            game.bots.forEach((bot, seat) => {
-              const row = rows.get(bot.id)!,
-                draw = game.result.winners.length !== 1;
-              const score = draw ? 0.5 : Number(game.result.winners.includes(seat));
-              row.ratedGames++;
-              if (draw) row.draws++;
-              else if (score === 1) row.wins++;
-              else row.losses++;
-              if (bot.id === a.id) aScore += score;
+            row.ratedGames++;
+            if (ranks[seat] !== best) row.losses++;
+            else if (shared) row.draws++;
+            else row.wins++;
+            game.bots.forEach((other, o) => {
+              if (o === seat) return;
+              const key = `${bot.id}\n${other.id}`;
+              const s = ranks[seat] < ranks[o] ? 1 : ranks[seat] === ranks[o] ? 0.5 : 0;
+              score.set(key, (score.get(key) ?? 0) + s);
             });
-          }
-          const ra = rows.get(a.id)!,
-            rb = rows.get(b.id)!;
-          [ra.elo, rb.elo] = eloPair(ra.elo, rb.elo, aScore / 2);
-        } else {
-          // Count the otherwise-eligible half as unrated as well.
-          for (const game of fixture.filter((g) => g.result.ratingEligible))
-            for (const bot of game.bots) rows.get(bot.id)!.unratedGames++;
+          });
         }
+        // Each pair's averaged result, from the ratings before this fixture.
+        const start = new Map(table.map((b) => [b.id, rows.get(b.id)!.elo]));
+        const k = 32 / (table.length - 1);
+        for (let i = 0; i < table.length; i++)
+          for (let j = i + 1; j < table.length; j++) {
+            const a = table[i].id,
+              b = table[j].id;
+            const [na, nb] = eloPair(
+              start.get(a)!,
+              start.get(b)!,
+              score.get(`${a}\n${b}`)! / fixture.length,
+              k,
+            );
+            rows.get(a)!.elo += na - start.get(a)!;
+            rows.get(b)!.elo += nb - start.get(b)!;
+          }
+      } else {
+        // Count the otherwise-eligible games as unrated as well.
+        for (const game of fixture.filter((g) => g.result.ratingEligible))
+          for (const bot of game.bots) rows.get(bot.id)!.unratedGames++;
       }
+    }
   }
   return {
     formatVersion: 2,

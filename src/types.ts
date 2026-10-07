@@ -119,6 +119,8 @@ export type GameEvent = FaultEvent | ActionEvent;
 export interface MatchResult {
   reason: 'completed' | 'forfeit' | 'both_failed' | 'turn_limit' | 'no_legal_action';
   winners: number[];
+  /** Finishing order per seat (0 = first, ties share). Absent on older records. */
+  ranks?: number[];
   ratingEligible: boolean;
 }
 export interface GameRecord {

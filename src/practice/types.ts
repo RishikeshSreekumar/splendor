@@ -19,6 +19,8 @@ export interface PracticeView {
   /** Decisions applied by this request, in order: the human move (if any) and every bot reply. */
   steps: PracticeStep[];
   notices: string[];
+  /** A move (the human's and the bots' replies) is still being computed on the server. */
+  busy?: boolean;
 }
 export interface PracticeOptions {
   opponents: string[];

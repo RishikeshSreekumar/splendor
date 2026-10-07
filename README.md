@@ -28,7 +28,7 @@ The application contains:
 - **Evaluation reports:** persisted cohort Elo, faults, assistance counts, and verified move-by-move replay with each bot's recorded clock.
 - **System design:** eight rendered architecture/UML views, also maintained as Mermaid source in [docs/architecture.md](docs/architecture.md).
 
-The hosted application is at **https://splendor.sudipmondal.co.in**. Sign in to submit bots, run evaluations, and use the practice table. Qualified bots and their source are public; pending/failed versions and evaluation reports belong to their owner. Ratings start at 1200 per benchmark, not across a global ladder.
+The hosted application is at **https://splendor.sudipmondal.co.in**. Sign in to submit bots, run evaluations, and use the practice table. Qualified bots and their source are public; pending/failed versions and evaluation reports belong to their owner. Every bot and player has one rating on the global [Leaderboard](#ratings); each evaluation report also rates its own cohort from 1200.
 
 Without `SPLENDOR_STORAGE=supabase`, the app uses local SQLite at `storage/lab.sqlite` (override with `SPLENDOR_DB_PATH`) and binds to loopback. Local practice and CLI evaluation remain available without an account, but submitting a bot always requires a verified Supabase login. Configure hosted mode to enable account sign-in and submission in the workshop; see `.env.example` and [deployment notes](docs/deployment.md).
 
@@ -106,11 +106,34 @@ See `examples/llm-player.ts` for a Chat Completions-style template. Replace its 
 | Turn cap or no legal action                                | Explicit incomplete result                                                 | Unrated paired fixture               |
 | Internal engine failure                                    | Fail the job                                                               | Fail the job, never penalize the bot |
 
-The simulator's fallback is seeded random legal play. The human practice table uses the first legal action for any bot that fails, for the rest of that game. Both paths mark assistance and withhold increments for assisted turns. Practice never changes ratings.
+The simulator's fallback is seeded random legal play. The human practice table uses the first legal action for any bot that fails, for the rest of that game. Both paths mark assistance and withhold increments for assisted turns. Practice-mode evaluations never change ratings; human practice games do (see [Ratings](#ratings)).
 
-Every pair of opponents plays two independently seeded deals with swapped seats. Fresh deals prevent networked bots reusing hidden cards learned in the previous game. Legacy reports retain their original repeated-deal policy. Elo uses the average score across the two games and K=32 per complete fixture; unfinished halves never produce a rating update. Rows remain provisional below 30 rated games. Use many independent seeds and diverse opponents; a small cohort is not an absolute skill measurement.
+With two or three bots, every pair of opponents plays two independently seeded deals with swapped seats. With four or more, bots play together at four-player tables: every 4-bot combination plays one game per seat rotation (each bot starts once), each with a fresh deal. Fresh deals prevent networked bots reusing hidden cards learned in the previous game. Legacy reports retain their original repeated-deal policy. Report Elo averages each pair's placement results over the fixture with K=32, split across opponents at larger tables; an unfinished fixture never produces a rating update. In a ranked multiplayer game a faulting bot forfeits and ranks last (earlier forfeits lower) while the others play on; its seat moves by fallback. When one healthy bot remains, the game ends. Rows remain provisional below 30 rated games. Use many independent seeds and diverse opponents; a small cohort is not an absolute skill measurement.
 
 Reports store rules version, source hashes, actions, faults, elapsed decision time, and clock snapshots. Full deal seeds are withheld from the UI until the entire evaluation finishes. Replay reconstructs game states and verifies their hashes without rerunning bot code. Timing is recorded evidence, not deterministically remeasured. Format 2 adds clock data; the core replay reader also accepts original format 1 artifacts. Hashes detect accidental changes but do not authenticate an artifact.
+
+## Ratings
+
+The **Leaderboard** shows one global Elo for every qualified bot and every human player, all starting at 1200. Ranked evaluation games (each one, not just whole fixtures) and practice games update it. Each game compares every pair of players by finishing order (points, then fewer cards) with K=32 split across opponents, so a four-player game weighs as much as a 1v1 game. Past a 500-point gap, a game cannot widen it: the favourite gains nothing and the underdog loses nothing, while upsets still count. Abandoning a practice game, or replacing it with a new one, is free before your third turn and afterwards counts as a loss to every bot at the table. Unfinished games are never dropped silently: after a week idle they are abandoned by the same rule. Each evaluation and game is applied exactly once. Player names on the ladder are pseudonymous.
+
+## AI agents (MCP)
+
+Claude, Codex and other MCP clients can do everything the web app does: read the bot guide, submit and qualify bots, run evaluations and read their games, and play practice games. The endpoint is `/api/mcp` (Streamable HTTP). In hosted mode, sign in, open **Account → AI agent access**, and create a personal access token; it is shown once and can be revoked there.
+
+```sh
+claude mcp add --transport http splendor https://splendor.sudipmondal.co.in/api/mcp --header "Authorization: Bearer spl_…"
+```
+
+```toml
+# ~/.codex/config.toml — export SPLENDOR_TOKEN=spl_… before starting Codex
+[mcp_servers.splendor]
+url = "https://splendor.sudipmondal.co.in/api/mcp"
+bearer_token_env_var = "SPLENDOR_TOKEN"
+```
+
+Tools: `get_account`, `get_bot_guide`, `get_leaderboard`, `list_bots`, `get_bot`, `submit_bot`, `list_evaluations`, `start_evaluation`, `get_evaluation`, `get_evaluation_game`, `get_game`, `start_game`, `play_move`, `abandon_game`. Bots may be named (`"Greedy"`) instead of passing IDs. `play_move` takes an index into `legalActions`; bot replies run before it returns. `get_bot` and `get_evaluation` accept `waitSeconds` so agents need not poll quickly. Local mode serves the same endpoint without a token, except bot submission, which always needs a hosted account.
+
+**Limits.** Each account has one unfinished practice game; `get_game` resumes it in either the browser or an agent, and `start_game` with `abandonExisting` replaces it. Evaluation launches and bot submissions are token-bucket limited per account and per IP (3 per 15 minutes), on top of 2 concurrent and 20 daily evaluations. A refused call returns 429 with `Retry-After`; calling again before then doubles the wait, up to a day. Practice starts, moves and status reads have separate, more generous limits.
 
 ## CLI and verification
 
@@ -130,4 +153,4 @@ See [the UML design](docs/architecture.md) for domain classes, runner/clock clas
 
 Application code remains one Next.js/TypeScript project. Modal executes a compiled TypeScript runner using its JavaScript SDK; the small Cloudflare Worker provides authenticated R2 access. There is no Python application service or Express backend. Workers are built into `.runtime` before development, builds, CLI runs and tests. Rebuild and publish the pinned Modal image after changing rules, SDK, sandbox or runner code.
 
-Run `npm run check` and `npm run build` before deployment. Rules review and regression tests remain ongoing: no test suite establishes absolute absence of bugs. Persistent global matchmaking and platform-funded provider billing are not implemented.
+Run `npm run check` and `npm run build` before deployment. Rules review and regression tests remain ongoing: no test suite establishes absolute absence of bugs. Automatic matchmaking and platform-funded provider billing are not implemented.
