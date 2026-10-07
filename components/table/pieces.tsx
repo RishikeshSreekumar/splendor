@@ -45,12 +45,15 @@ export function DevelopmentCard({
   state,
   onClick,
   label,
+  fly,
 }: {
   card: Card;
   /** Visual affordances: playable cards glow, the selected card lifts. */
   state?: { affordable?: boolean; selected?: boolean; fresh?: boolean; dimmed?: boolean };
   onClick?: () => void;
   label?: string;
+  /** Lets the table animate this piece moving between places. */
+  fly?: string;
 }) {
   const cost = COLORS.filter((c) => card.cost[c]);
   const classes = [
@@ -92,11 +95,12 @@ export function DevelopmentCard({
       onClick={onClick}
       aria-label={name}
       aria-pressed={state?.selected}
+      data-fly={fly}
     >
       {body}
     </button>
   ) : (
-    <div className={classes} role="img" aria-label={name}>
+    <div className={classes} role="img" aria-label={name} data-fly={fly}>
       {body}
     </div>
   );
@@ -107,12 +111,14 @@ export function CardBack({
   onClick,
   selected,
   small,
+  fly,
 }: {
   tier: number;
   count?: number;
   onClick?: () => void;
   selected?: boolean;
   small?: boolean;
+  fly?: string;
 }) {
   const content = (
     <>
@@ -128,6 +134,7 @@ export function CardBack({
       className={classes}
       onClick={onClick}
       aria-label={`Tier ${tier} deck, ${count} cards. Reserve the top card`}
+      data-fly={fly}
     >
       {content}
     </button>
@@ -136,6 +143,7 @@ export function CardBack({
       className={classes}
       aria-label={`Tier ${tier} ${count === undefined ? 'hidden card' : `deck, ${count} cards`}`}
       role="img"
+      data-fly={fly}
     >
       {content}
     </div>
@@ -146,12 +154,14 @@ export function NobleTile({
   onClick,
   eligible,
   progress,
+  fly,
 }: {
   noble: Noble;
   onClick?: () => void;
   eligible?: boolean;
   /** The human's bonuses toward each required color. */
   progress?: Partial<Record<Color, number>>;
+  fly?: string;
 }) {
   const content = (
     <>
@@ -181,11 +191,17 @@ export function NobleTile({
       className={`gt-noble clickable ${eligible ? 'eligible' : ''}`}
       onClick={onClick}
       aria-label={`Choose: ${label}`}
+      data-fly={fly}
     >
       {content}
     </button>
   ) : (
-    <div className={`gt-noble ${eligible ? 'eligible' : ''}`} role="img" aria-label={label}>
+    <div
+      className={`gt-noble ${eligible ? 'eligible' : ''}`}
+      role="img"
+      aria-label={label}
+      data-fly={fly}
+    >
       {content}
     </div>
   );

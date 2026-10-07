@@ -36,7 +36,9 @@ import { GameTable, type TableControls } from './table/game-table';
 import { COLORS, GEMS, GEM_NAMES, Token } from './table/pieces';
 import { StepText } from './table/step-text';
 type Speed = 'fast' | 'normal' | 'slow';
-const STEP_DELAY: Record<Speed, number> = { fast: 350, normal: 850, slow: 1500 };
+const STEP_DELAY: Record<Speed, number> = { fast: 900, normal: 1700, slow: 2600 };
+/** Travel time for gems and cards moving between the board and a player. */
+const FLIGHT_MS: Record<Speed, number> = { fast: 500, normal: 850, slow: 1200 };
 const LEVELS: Record<string, { label: string; blurb: string; rank: number }> = {
   Random: { label: 'Beginner', blurb: 'Plays any legal move.', rank: 0 },
   Greedy: { label: 'Intermediate', blurb: 'Buys what it can, chases near cards.', rank: 1 },
@@ -161,7 +163,7 @@ export function Practice() {
       ]);
       if (next.steps.length) setAnimating(true);
       let previous = shown?.view;
-      for (const step of next.steps) {
+      for (const [i, step] of next.steps.entries()) {
         if (token !== playToken.current) return;
         const before = new Set((previous?.market ?? []).flat().map((c) => c.id));
         const fresh = new Set(
@@ -174,6 +176,9 @@ export function Practice() {
         setCaption(step);
         previous = step.view;
         if (step.seat !== next.humanSeat) await sleep(delay);
+        // The human's move was already drawn optimistically, but only the server knows the
+        // card dealt into the gap and which noble visits: hold that board before the bots move.
+        else if (i < next.steps.length - 1) await sleep(FLIGHT_MS[settings.speed] + 350);
       }
       if (token !== playToken.current) return;
       setShown({ view: next.view, acting: null, fresh: new Set() });
@@ -244,12 +249,16 @@ export function Practice() {
       fresh: new Set(),
     });
     try {
-      const next = await api<PracticeView>('/api/play', {
-        type: 'action',
-        id: session.id,
-        action,
-        revision: session.revision,
-      });
+      // Let the human's own pieces land before the bots start moving theirs.
+      const [next] = await Promise.all([
+        api<PracticeView>('/api/play', {
+          type: 'action',
+          id: session.id,
+          action,
+          revision: session.revision,
+        }),
+        sleep(FLIGHT_MS[settings.speed] + 400),
+      ]);
       setSession(next);
       await present(next);
     } catch (e) {
@@ -540,6 +549,7 @@ export function Practice() {
         }
         freshCards={shown?.fresh}
         timedSeats={new Set(seats.flatMap((s, i) => (s.kind === 'bot' ? [i] : [])))}
+        flightMs={FLIGHT_MS[settings.speed]}
         aside={<GameLog log={log} names={names} />}
       />
       {finished && (
