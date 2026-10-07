@@ -6,11 +6,30 @@ The application uses Vercel for Next.js, Modal's JavaScript SDK for game executi
 
 Copy `.env.example` to ignored `.env.local` and provide the server credentials. Only the Supabase URL and anon key are returned by `/api/config`; every other key remains server-only. Do not prefix service credentials with `NEXT_PUBLIC_`. `PLATFORM_TOKEN` must match the R2 gateway's Worker secret. `CRON_SECRET` protects the recovery endpoint. `APP_ORIGIN` must be the browser-facing origin. `BOT_SECRETS_KEY` is a 32-byte key encoded as 64 hex characters for AES-256-GCM. Preserve it across deployments; rotation requires decrypting/re-encrypting existing bot keys. Apply migration 0004 before deploying the networking release.
 
-**Multi-bot practice release order:** (1) apply `202610070001_practice_seats.sql`; (2) run `scripts/seed-cloud.ts` to add the Strategist baseline; (3) rebuild the Modal image and commit `modal-image.json`, because the practice runner protocol changed; (4) deploy the web app. The new runner still accepts the old single-opponent payload, and sessions created before the migration keep playing Greedy.
+**Multi-bot practice release order:** (1) apply `20261006202519_practice_seats.sql`; (2) run `scripts/seed-cloud.ts` to add the Strategist baseline; (3) rebuild the Modal image and commit `modal-image.json`, because the practice runner protocol changed; (4) deploy the web app. The new runner still accepts the old single-opponent payload, and sessions created before the migration keep playing Greedy.
 
-**Global ladder release order:** (1) apply `202610070003_global_ratings.sql`; (2) rebuild the Modal image and commit `modal-image.json`, because evaluations of four or more bots now play shared tables and games record placements; (3) deploy the web app. Until the image is rebuilt, old runners still produce 1v1 reports; the ladder rates them from their winners, but four-plus-bot jobs show a game count that does not match.
+**Global ladder release order:** (1) apply `20261007115110_global_ratings.sql`; (2) rebuild the Modal image and commit `modal-image.json`, because evaluations of four or more bots now play shared tables and games record placements; (3) deploy the web app. Until the image is rebuilt, old runners still produce 1v1 reports; the ladder rates them from their winners, but four-plus-bot jobs show a game count that does not match.
 
-**MCP and rate-limit release order:** apply `202610070002_mcp_tokens_rate_limits.sql` before deploying the web app. Every evaluation, bot and practice route calls the new `splendor_rate_limit` RPC and the new `splendor_create_practice` signature, so they fail until it is applied. No runner image change is needed.
+**MCP and rate-limit release order:** apply `20261007115054_mcp_tokens_rate_limits.sql` before deploying the web app. Every evaluation, bot and practice route calls the new `splendor_rate_limit` RPC and the new `splendor_create_practice` signature, so they fail until it is applied. No runner image change is needed.
+
+## Automated release
+
+Every push to `main` runs `.github/workflows/deploy.yml`, which performs the release orders above on its own:
+
+1. **Checks**: the `Quality checks` workflow (types, lint, tests, formatting).
+2. **Supabase migrations**: `supabase db push` applies new files in `supabase/migrations`. File versions match the project's migration history (`supabase_migrations.schema_migrations`), so name new files with a later `YYYYMMDDHHMMSS_` prefix and never edit an applied one.
+3. **Modal runner image** (in parallel with 2): `scripts/build-modal-image.ts --if-changed` rebuilds only when the bundled runtime changed (its hash is stored in `modal-image.json`), then `scripts/verify-modal.ts` plays baseline games at 512 and 2048 MiB and a shared-table practice turn. A new image is committed back to `main` with `[skip ci]`.
+4. **Vercel production**: once both succeed, the app is built and deployed with the verified `modal-image.json`. `vercel.json` disables Git auto-deploys for `main` so the site cannot go live ahead of its schema or runner; other branches still get preview deployments.
+
+Runs queue and never cancel each other. Run the workflow manually with **Rebuild the Modal image** to force a fresh image. Required repository secrets, stored by `scripts/setup-github-secrets.sh` (it reads Modal credentials from `.env.local` and prompts for the rest without echoing):
+
+| Secret                                 | Source                                                              |
+| -------------------------------------- | ------------------------------------------------------------------- |
+| `SUPABASE_DB_URL`                      | Supabase → Connect → Session pooler URI, with the database password |
+| `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET` | The Modal token in `.env.local`                                     |
+| `VERCEL_TOKEN`                         | vercel.com/account/tokens, scoped to `sudip-mondals-projects`       |
+
+Runtime secrets stay in the Vercel project settings; the workflow pulls them during the build.
 
 Apply the SQL files in `supabase/migrations` in order. The tables have RLS enabled and no direct browser grants. Backend routes verify user tokens with Supabase and enforce ownership. RPCs reserve account quotas under a transaction advisory lock. Seed public versions with:
 
@@ -36,11 +55,7 @@ An allocation probe is available in `scripts/verify-modal-limit.ts`; its observe
 
 ## Storage and web release
 
-The GitHub repository is `sudip-mondal-2002/splendor`, connected to the existing Vercel project `splendor-strategy-lab` in `sudip-mondals-projects`. Pushes to `main` automatically build and publish the Next.js site at `splendor.sudipmondal.co.in`. Other branches receive Vercel preview deployments. Git deployments are explicitly enabled in `vercel.json`; no deployment token is stored in GitHub.
-
-The `Quality checks` GitHub Actions workflow runs types, lint, tests, and formatting on pushes and pull requests. These checks run alongside Vercel builds; they are not a deployment approval gate. Production secrets remain in the existing Vercel project settings. Preview environments need their own service configuration before cloud features can be used.
-
-This automation deploys the Next.js application. Changes to the Modal runner still require building and committing a new `modal-image.json` as described above before pushing the web release; SQL migrations and the R2 gateway retain their separate release steps.
+The GitHub repository is `sudip-mondal-2002/splendor`, connected to the existing Vercel project `splendor-strategy-lab` in `sudip-mondals-projects`. Production deploys come from the Deploy workflow (see Automated release); other branches receive Vercel preview deployments. The `Quality checks` workflow runs on pull requests and non-`main` pushes, and gates the production release. Preview environments need their own service configuration before cloud features can be used. The R2 gateway keeps its separate release step.
 
 `cloudflare/wrangler.jsonc` binds the private `splendor-artifacts` R2 bucket. Set the Worker secret without committing it, then deploy the gateway:
 

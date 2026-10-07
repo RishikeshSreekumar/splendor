@@ -1,8 +1,11 @@
 name: Quality checks
 
+# `main` runs these checks inside the Deploy workflow, before anything is released.
 on:
   push:
+    branches-ignore: [main]
   pull_request:
+  workflow_call:
 
 permissions:
   contents: read

@@ -1,0 +1,116 @@
+name: Deploy
+
+# Production release for every push to main: quality checks, then Supabase migrations and the
+# Modal runner image (in parallel), then the Vercel web app, so the site never goes live
+# against a schema or runner it does not support.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      rebuild_image:
+        description: Rebuild the Modal image even if the runner is unchanged
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+# Releases queue rather than cancel: a half-applied release is worse than a late one.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  VERCEL_ORG_ID: team_6QIumXWmiAvYI4RFZgTu17qO
+  VERCEL_PROJECT_ID: prj_IvXVTut5XJeZ8zWVbQ3Ygh3oyJjY
+
+jobs:
+  checks:
+    uses: ./.github/workflows/ci.yml
+
+  migrate:
+    name: Supabase migrations
+    needs: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
+        with:
+          version: latest
+      - name: Pending migrations
+        run: supabase db push --db-url "$SUPABASE_DB_URL" --dry-run
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      - name: Apply migrations
+        run: supabase db push --db-url "$SUPABASE_DB_URL"
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+
+  runner:
+    name: Modal runner image
+    needs: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    env:
+      MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+      MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run build:runtime
+      - name: Build image if the runner changed
+        id: image
+        run: npx tsx scripts/build-modal-image.ts ${{ inputs.rebuild_image && '--force' || '--if-changed' }}
+      - name: Verify the new image
+        if: steps.image.outputs.built == 'true'
+        run: npx tsx scripts/verify-modal.ts
+      - name: Pin the image in the repository
+        if: steps.image.outputs.built == 'true' && github.ref == 'refs/heads/main'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add modal-image.json
+          git commit -m "Pin Modal runner image $(jq -r .imageId modal-image.json) [skip ci]"
+          git pull --rebase origin main
+          git push origin HEAD:main
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: modal-image
+          path: modal-image.json
+
+  web:
+    name: Vercel production
+    needs: [migrate, runner]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: production
+      url: https://splendor.sudipmondal.co.in
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '24'
+          cache: npm
+      # The image this release was verified with, even if main has moved on since.
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: modal-image
+      - run: npm ci
+      - run: npx --yes vercel@latest pull --yes --environment=production --token="$VERCEL_TOKEN"
+      - run: npx --yes vercel@latest build --prod --token="$VERCEL_TOKEN"
+      - run: npx --yes vercel@latest deploy --prebuilt --prod --token="$VERCEL_TOKEN"
