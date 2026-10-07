@@ -1,6 +1,7 @@
 import { randomUUID, createHash } from 'node:crypto';
 import { encryptBotSecrets, secretFingerprint } from './bot-secrets';
 import { database, getArtifact, putArtifact } from './cloud';
+import { evaluationGameCount } from '../fixtures';
 import type { StoredBot, EvaluationConfig, EvaluationJob } from './store';
 import type { ProjectFile } from '../submissions/bundle';
 import type { EvaluationReport } from '../types';
@@ -188,7 +189,7 @@ export class CloudStore {
       p_id: id,
       p_payload: {
         config,
-        total_games: config.botIds.length * (config.botIds.length - 1) * config.pairs,
+        total_games: evaluationGameCount(config.botIds.length, config.pairs),
       },
     });
     check(error);

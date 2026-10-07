@@ -2,6 +2,7 @@ import { Worker } from 'node:worker_threads';
 import { randomBytes } from 'node:crypto';
 import { resolve } from 'node:path';
 import { getStore, type EvaluationConfig, type EvaluationJob } from './store';
+import { evaluationGames } from '../ratings';
 import type { EvaluationReport } from '../types';
 export class JobQueue {
   private pending: string[] = [];
@@ -48,6 +49,7 @@ export class JobQueue {
           if (m.type === 'progress') store.progress(id, m.count);
           if (m.type === 'complete') {
             store.complete(id, m.report);
+            store.applyRatings(`evaluation:${id}`, evaluationGames(m.report));
             finished = true;
           }
           if (m.type === 'error') {

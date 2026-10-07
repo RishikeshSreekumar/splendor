@@ -1851,3 +1851,27 @@ kbd {
     transition: none;
   }
 }
+
+/* Pieces in flight between the board and a player (see flights.tsx). */
+.gt-flights {
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 0;
+  height: 0;
+  z-index: 60;
+  pointer-events: none;
+}
+.gt-flight {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: grid;
+  place-items: center;
+  transform-origin: 0 0;
+  will-change: transform, opacity;
+  filter: drop-shadow(0 10px 14px rgba(0, 0, 0, 0.45));
+}
+.gt-flight .gt-card,
+.gt-flight .gt-back {
+  animation: none;
+}

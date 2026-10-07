@@ -122,7 +122,9 @@ export function EvaluationDetail({ id }: { id: string }) {
               <h2>
                 <Trophy size={20} /> Benchmark standings
               </h2>
-              <span className="muted">Ratings reset to 1200 for this cohort</span>
+              <span className="muted">
+                Cohort ratings start at 1200 · ranked games also update the global ladder
+              </span>
             </div>
             <div className="table-wrap">
               <table>

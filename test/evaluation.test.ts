@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { simulate, replay } from '../src/simulation';
-import { evaluate, eloPair, winInterval } from '../src/evaluation';
+import { evaluate, eloPair, evaluationGameCount, winInterval } from '../src/evaluation';
 import { assertInvariants } from '../src/engine';
 const greedy = {
   id: 'greedy',
@@ -25,7 +25,12 @@ const looping = {
 const broken = { id: 'broken', source: 'export default class {' };
 test('ranked invalid action forfeits without applying fallback or changing board', async () => {
   const r = await simulate({ bots: [invalid, greedy] });
-  assert.deepEqual(r.result, { reason: 'forfeit', winners: [1], ratingEligible: true });
+  assert.deepEqual(r.result, {
+    reason: 'forfeit',
+    winners: [1],
+    ranks: [1, 0],
+    ratingEligible: true,
+  });
   assert.equal(r.turns, 0);
   assert.deepEqual(r.faults, [1, 0]);
   assert.equal(r.assistedDecisions, 0);
@@ -66,7 +71,12 @@ test('timeouts forfeit ranked games and become automatic fallback for remaining 
 });
 test('startup failures are attributed, and two failed bots do not create a rated match', async () => {
   const r = await simulate({ bots: [greedy, broken] });
-  assert.deepEqual(r.result, { reason: 'forfeit', winners: [0], ratingEligible: true });
+  assert.deepEqual(r.result, {
+    reason: 'forfeit',
+    winners: [0],
+    ranks: [0, 1],
+    ratingEligible: true,
+  });
   assert.equal(r.log[0].kind === 'fault' ? r.log[0].stage : '', 'startup');
   const both = await simulate({ bots: [broken, { ...broken, id: 'also-broken' }] });
   assert.deepEqual(both.result, { reason: 'both_failed', winners: [], ratingEligible: false });
@@ -89,15 +99,56 @@ test('turn cap reports incomplete game without inventing a winner or rating', as
   assert.deepEqual(r.result, { reason: 'turn_limit', winners: [], ratingEligible: false });
   assert.equal(r.turns, 2);
 });
-test('three- and four-player practice work; multiplayer ranked is rejected', async () => {
+test('three- and four-player games run in practice and ranked modes with placements', async () => {
   for (const n of [3, 4]) {
     const bots = Array.from({ length: n }, (_, i) => ({ ...greedy, id: `greedy-${i}` }));
     const r = await simulate({ bots, mode: 'practice', seed: 'multi' });
     assert.equal(r.result.reason, 'completed');
     assert.equal(r.result.ratingEligible, false);
     assertInvariants(replay(r));
-    await assert.rejects(simulate({ bots, mode: 'ranked' }), /two players/);
+    const ranked = await simulate({ bots, mode: 'ranked', seed: 'multi' });
+    assert.equal(ranked.result.ratingEligible, true);
+    assert.equal(ranked.result.ranks!.length, n);
+    assert.deepEqual(
+      ranked.result.winners,
+      ranked.result.ranks!.flatMap((rank, s) => (rank === 0 ? [s] : [])),
+    );
   }
+});
+test('a multiplayer forfeit ranks the faulting bot last while the others play on', async () => {
+  const r = await simulate({ bots: [invalid, greedy, { ...random, id: 'random' }], seed: 'mf' });
+  assert.equal(r.result.reason, 'completed');
+  assert.equal(r.result.ranks![0], 2);
+  assert.ok(!r.result.winners.includes(0));
+  assert.ok(r.turns > 1, 'the table kept playing');
+  assert.ok(r.assistedDecisions > 0, 'the forfeited seat moved by fallback');
+  assertInvariants(replay(r));
+  // A forfeit that leaves one healthy bot ends the game at once.
+  const two = await simulate({ bots: [invalid, broken, greedy] });
+  assert.equal(two.result.reason, 'forfeit');
+  assert.deepEqual(two.result.winners, [2]);
+  // `broken` failed at startup, before `invalid` faulted, so it ranks lowest.
+  assert.deepEqual(two.result.ranks, [1, 2, 0]);
+});
+test('evaluations of four or more bots play shared tables with seat rotation', async () => {
+  const bots = ['a', 'b', 'c', 'd', 'e'].map((id, i) => ({
+    ...(i % 2 ? greedy : random),
+    id,
+  }));
+  assert.equal(evaluationGameCount(2, 3), 6);
+  assert.equal(evaluationGameCount(3, 1), 6);
+  assert.equal(evaluationGameCount(4, 1), 4);
+  assert.equal(evaluationGameCount(5, 1), 20);
+  assert.equal(evaluationGameCount(6, 2), 120);
+  const r = await evaluate({ bots: bots.slice(0, 4), pairs: 1, seed: 'table' });
+  assert.equal(r.games.length, 4);
+  for (const [i, g] of r.games.entries()) {
+    assert.equal(g.bots.length, 4);
+    assert.equal(g.bots[0].id, ['a', 'b', 'c', 'd'][i], 'each bot starts once');
+  }
+  assert.equal(new Set(r.games.map((g) => g.seed)).size, 4);
+  assert.equal(Math.round(r.leaderboard.reduce((n, row) => n + row.elo, 0)), 4800);
+  for (const row of r.leaderboard) assert.equal(row.ratedGames, 4);
 });
 test('Elo is zero-sum, symmetric and handles draws', () => {
   assert.deepEqual(eloPair(1200, 1200, 1), [1216, 1184]);
@@ -106,6 +157,13 @@ test('Elo is zero-sum, symmetric and handles draws', () => {
   assert.ok(a < 1500 && b > 1100);
   assert.equal(a + b, 2600);
   assert.throws(() => eloPair(1200, 1200, 2));
+  // Past a 500-point gap the favourite gains nothing and the underdog loses nothing...
+  assert.deepEqual(eloPair(1800, 1200, 1), [1800, 1200]);
+  assert.deepEqual(eloPair(1200, 1800, 0), [1200, 1800]);
+  // ...but upsets and draws still move both ratings.
+  const [u, f] = eloPair(1200, 1800, 1);
+  assert.ok(u > 1200 && f < 1800 && u + f === 3000);
+  assert.ok(eloPair(1200, 1800, 0.5)[0] > 1200);
   assert.deepEqual(winInterval(0, 0), [0, 1]);
   assert.ok(winInterval(10, 10)[0] < 0.8);
 });

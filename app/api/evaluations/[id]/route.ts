@@ -1,3 +1,4 @@
+import { enforceRateLimit, RATE_LIMITS } from '@/src/server/rate-limit';
 import { isCloud, owner } from '@/src/server/cloud';
 import { CloudStore } from '@/src/server/cloud-store';
 import { reconcileRun } from '@/src/server/modal-jobs';
@@ -13,6 +14,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       const id = (await params).id,
         user = await owner(_request),
         store = new CloudStore();
+      await enforceRateLimit(_request, RATE_LIMITS.statusRead, user);
       const existing = await store.getJob(id, user);
       if (!existing) return Response.json({ error: 'Not found' }, { status: 404 });
       await reconcileRun('evaluation', id);
@@ -20,6 +22,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     } catch (error) {
       return apiError(error);
     }
+  }
+  try {
+    await enforceRateLimit(_request, RATE_LIMITS.statusRead, await owner(_request));
+  } catch (error) {
+    return apiError(error);
   }
   getQueue();
   const job = getStore().getJob((await params).id);

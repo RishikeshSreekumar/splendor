@@ -31,12 +31,14 @@ import {
   reserveAction,
 } from '@/src/practice/moves';
 import type { Action, Card, Gem, Observation } from '@/src/types';
-import { api, ErrorNotice, errorMessage } from './ui';
+import { api, ApiRequestError, ErrorNotice, errorMessage } from './ui';
 import { GameTable, type TableControls } from './table/game-table';
 import { COLORS, GEMS, GEM_NAMES, Token } from './table/pieces';
 import { StepText } from './table/step-text';
 type Speed = 'fast' | 'normal' | 'slow';
-const STEP_DELAY: Record<Speed, number> = { fast: 350, normal: 850, slow: 1500 };
+const STEP_DELAY: Record<Speed, number> = { fast: 900, normal: 1700, slow: 2600 };
+/** Travel time for gems and cards moving between the board and a player. */
+const FLIGHT_MS: Record<Speed, number> = { fast: 500, normal: 850, slow: 1200 };
 const LEVELS: Record<string, { label: string; blurb: string; rank: number }> = {
   Random: { label: 'Beginner', blurb: 'Plays any legal move.', rank: 0 },
   Greedy: { label: 'Intermediate', blurb: 'Buys what it can, chases near cards.', rank: 1 },
@@ -126,13 +128,22 @@ export function Practice() {
       })
       .catch((e) => setError(errorMessage(e)));
   }, []);
-  const sessionId = session?.id;
-  useEffect(
-    () => () => {
-      if (sessionId) void api('/api/play', { type: 'close', id: sessionId }).catch(() => {});
-    },
-    [sessionId],
-  );
+  // One unfinished game per account: pick it up again, whether it began here or from an agent.
+  useEffect(() => {
+    api<{ game: PracticeView | null }>('/api/play')
+      .then(({ game }) => {
+        if (!game) return;
+        setSession(game);
+        setShown({ view: game.view, acting: null, fresh: new Set() });
+        setSetupOpen(false);
+        setNotices([
+          game.busy
+            ? 'Resumed your unfinished game. A move is still finishing; reload in a moment.'
+            : 'Resumed your unfinished game.',
+        ]);
+      })
+      .catch(() => {});
+  }, []);
   const clearSelection = useCallback(() => {
     setTake({});
     setRet({});
@@ -152,7 +163,7 @@ export function Practice() {
       ]);
       if (next.steps.length) setAnimating(true);
       let previous = shown?.view;
-      for (const step of next.steps) {
+      for (const [i, step] of next.steps.entries()) {
         if (token !== playToken.current) return;
         const before = new Set((previous?.market ?? []).flat().map((c) => c.id));
         const fresh = new Set(
@@ -165,6 +176,9 @@ export function Practice() {
         setCaption(step);
         previous = step.view;
         if (step.seat !== next.humanSeat) await sleep(delay);
+        // The human's move was already drawn optimistically, but only the server knows the
+        // card dealt into the gap and which noble visits: hold that board before the bots move.
+        else if (i < next.steps.length - 1) await sleep(FLIGHT_MS[settings.speed] + 350);
       }
       if (token !== playToken.current) return;
       setShown({ view: next.view, acting: null, fresh: new Set() });
@@ -174,18 +188,40 @@ export function Practice() {
   );
   async function start() {
     if (!settings.opponents.length) return;
+    const live = session?.view;
+    if (
+      live?.status === 'playing' &&
+      live.players[session!.humanSeat].turns >= 3 &&
+      !window.confirm('Starting over abandons this game, which counts as a rated loss. Continue?')
+    )
+      return;
     saveSettings(settings);
     setBusy(true);
     setError('');
     playToken.current++;
     try {
-      if (session) await api('/api/play', { type: 'close', id: session.id }).catch(() => {});
-      const next = await api<PracticeView>('/api/play', {
-        type: 'new',
-        clockConfig: { initialMs: 60000, incrementMs: 1000 },
-        opponents: settings.opponents,
-        order: settings.order,
-      });
+      const request = (replace: boolean) =>
+        api<PracticeView>('/api/play', {
+          type: 'new',
+          clockConfig: { initialMs: 60000, incrementMs: 1000 },
+          opponents: settings.opponents,
+          order: settings.order,
+          replace,
+        });
+      let next: PracticeView;
+      try {
+        // Starting over from this table abandons the game it shows.
+        next = await request(Boolean(session));
+      } catch (e) {
+        if (
+          !(e instanceof ApiRequestError && e.status === 409 && e.data.activeGameId) ||
+          !window.confirm(
+            'You have an unfinished game elsewhere. Abandon it (a rated loss after your third turn) and start this one?',
+          )
+        )
+          throw e;
+        next = await request(true);
+      }
       clearSelection();
       setLog([]);
       setCaption(null);
@@ -213,12 +249,16 @@ export function Practice() {
       fresh: new Set(),
     });
     try {
-      const next = await api<PracticeView>('/api/play', {
-        type: 'action',
-        id: session.id,
-        action,
-        revision: session.revision,
-      });
+      // Let the human's own pieces land before the bots start moving theirs.
+      const [next] = await Promise.all([
+        api<PracticeView>('/api/play', {
+          type: 'action',
+          id: session.id,
+          action,
+          revision: session.revision,
+        }),
+        sleep(FLIGHT_MS[settings.speed] + 400),
+      ]);
       setSession(next);
       await present(next);
     } catch (e) {
@@ -509,6 +549,7 @@ export function Practice() {
         }
         freshCards={shown?.fresh}
         timedSeats={new Set(seats.flatMap((s, i) => (s.kind === 'bot' ? [i] : [])))}
+        flightMs={FLIGHT_MS[settings.speed]}
         aside={<GameLog log={log} names={names} />}
       />
       {finished && (
@@ -898,7 +939,8 @@ function OpponentSelect({
                 {b.id === value && <Check size={15} className="gt-select-check" />}
               </span>
               <span className="gt-select-blurb">
-                {levelOf(b)?.blurb ?? 'A bot you built in the workshop.'}
+                {levelOf(b)?.blurb ?? 'A bot you built in the workshop.'}{' '}
+                <span className="bot-elo">Elo {Math.round(b.elo ?? 1200)}</span>
               </span>
             </li>
           ))}

@@ -1,11 +1,12 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Gem, FlaskConical, Code2, Shapes, Network, ArrowUpRight } from 'lucide-react';
+import { Gem, FlaskConical, Code2, Shapes, Network, ArrowUpRight, Trophy } from 'lucide-react';
 const links = [
   ['/', 'Evaluation arena', FlaskConical],
   ['/play', 'Practice table', Shapes],
   ['/bots', 'Bot workshop', Code2],
+  ['/ladder', 'Leaderboard', Trophy],
   ['/design', 'System design', Network],
   ['/account', 'Account', Gem],
 ] as const;

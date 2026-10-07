@@ -13,8 +13,17 @@ export async function api<T>(url: string, body?: unknown): Promise<T> {
         },
   );
   const result = await response.json();
-  if (!response.ok) throw new Error(result.error ?? 'Request failed');
+  if (!response.ok) throw new ApiRequestError(response.status, result);
   return result as T;
+}
+/** A failed API call, keeping the status and any fields the server added (e.g. activeGameId). */
+export class ApiRequestError extends Error {
+  constructor(
+    readonly status: number,
+    readonly data: Record<string, unknown>,
+  ) {
+    super(typeof data.error === 'string' ? data.error : 'Request failed');
+  }
 }
 export const errorMessage = (error: unknown) =>
   error instanceof Error ? error.message : 'Something went wrong';

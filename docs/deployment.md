@@ -8,6 +8,10 @@ Copy `.env.example` to ignored `.env.local` and provide the server credentials. 
 
 **Multi-bot practice release order:** (1) apply `202610070001_practice_seats.sql`; (2) run `scripts/seed-cloud.ts` to add the Strategist baseline; (3) rebuild the Modal image and commit `modal-image.json`, because the practice runner protocol changed; (4) deploy the web app. The new runner still accepts the old single-opponent payload, and sessions created before the migration keep playing Greedy.
 
+**Global ladder release order:** (1) apply `202610070003_global_ratings.sql`; (2) rebuild the Modal image and commit `modal-image.json`, because evaluations of four or more bots now play shared tables and games record placements; (3) deploy the web app. Until the image is rebuilt, old runners still produce 1v1 reports; the ladder rates them from their winners, but four-plus-bot jobs show a game count that does not match.
+
+**MCP and rate-limit release order:** apply `202610070002_mcp_tokens_rate_limits.sql` before deploying the web app. Every evaluation, bot and practice route calls the new `splendor_rate_limit` RPC and the new `splendor_create_practice` signature, so they fail until it is applied. No runner image change is needed.
+
 Apply the SQL files in `supabase/migrations` in order. The tables have RLS enabled and no direct browser grants. Backend routes verify user tokens with Supabase and enforce ownership. RPCs reserve account quotas under a transaction advisory lock. Seed public versions with:
 
 ```sh

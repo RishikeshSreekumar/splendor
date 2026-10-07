@@ -1,8 +1,9 @@
 'use client';
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { Bot, Clock3, Crown, Layers, Loader2, User } from 'lucide-react';
 import type { Card, Color, Gem, Observation, PlayerView } from '@/src/types';
 import { formatClock } from '../ui';
+import { planFlights, useFlights, type FlightPlan } from './flights';
 import { CardBack, DevelopmentCard, GEMS, GEM_NAMES, NobleTile, Token } from './pieces';
 /** What the human may click right now. Omit for a read-only table (replays). */
 export interface TableControls {
@@ -66,6 +67,8 @@ interface Delta {
   fresh: Set<string>;
   /** Cards that just arrived in a player's reserve. */
   newReserved: Set<string>;
+  /** Pieces that moved, e.g. gems from the bank to a player. */
+  flights: FlightPlan[];
 }
 function diffViews(a: Observation, b: Observation, id: number): Delta {
   const sub = (x: Partial<Record<Gem, number>>, y: Partial<Record<Gem, number>>) =>
@@ -93,6 +96,7 @@ function diffViews(a: Observation, b: Observation, id: number): Delta {
     newReserved: new Set(
       per((p, q) => reservedIds(q).filter((cid) => !reservedIds(p).includes(cid))).flat(),
     ),
+    flights: planFlights(a, b),
   };
 }
 /** A floating +n / −n that rises and fades once per change. */
@@ -120,6 +124,7 @@ export function GameTable({
   freshCards,
   timedSeats,
   aside,
+  flightMs = 750,
 }: {
   view: Observation;
   seats: SeatLabel[];
@@ -136,6 +141,8 @@ export function GameTable({
   /** Seats that play on a clock; others show "untimed". */
   timedSeats?: Set<number>;
   aside?: ReactNode;
+  /** How long a piece takes to travel across the table. */
+  flightMs?: number;
 }) {
   // Diff against the previously drawn view (React's "adjust state during render" pattern).
   const [prev, setPrev] = useState(view);
@@ -150,8 +157,15 @@ export function GameTable({
       next.tokens.every((t) => !Object.keys(t).length) &&
       next.points.every((n) => !n) &&
       next.reserved.every((n) => !n);
-    setDelta(quiet && delta ? { ...delta, fresh: next.fresh } : next);
+    setDelta(quiet && delta ? { ...delta, fresh: next.fresh, flights: next.flights } : next);
   }
+  const root = useRef<HTMLDivElement>(null);
+  const flights = useFlights(
+    root,
+    delta?.flights.length ? delta.id : undefined,
+    delta?.flights,
+    flightMs,
+  );
   const me = view.players[view.you];
   const phase = view.phase;
   const mainTurn = Boolean(controls) && phase === 'main';
@@ -169,7 +183,8 @@ export function GameTable({
     delta,
   });
   return (
-    <div className="gt-layout">
+    <div className="gt-layout" ref={root}>
+      {flights}
       <div className="gt-play">
         <section className={`gt-surface ${surfaceState}`} aria-label="Game table">
           <div className="gt-nobles" aria-label="Nobles">
@@ -179,6 +194,7 @@ export function GameTable({
                 <NobleTile
                   key={n.id}
                   noble={n}
+                  fly={`noble-${n.id}`}
                   eligible={eligible}
                   progress={focusSeat !== undefined ? me.bonuses : undefined}
                   onClick={
@@ -194,7 +210,7 @@ export function GameTable({
                 const picked = controls?.bankSelection[g] ?? 0;
                 const can = mainTurn && g !== 'gold' && controls!.canTakeGem(g);
                 return (
-                  <span className="gt-delta-host" key={g}>
+                  <span className="gt-delta-host" key={g} data-fly={`bank-${g}`}>
                     <DeltaBadge n={delta?.bank[g]} id={delta?.id} />
                     <Token
                       gem={g}
@@ -228,6 +244,7 @@ export function GameTable({
                   >
                     <CardBack
                       tier={t + 1}
+                      fly={`deck-${t + 1}`}
                       count={view.deckCounts[t]}
                       selected={controls?.selectedDeck === t + 1}
                       onClick={
@@ -247,6 +264,7 @@ export function GameTable({
                     >
                       <DevelopmentCard
                         card={card}
+                        fly={`card-${card.id}`}
                         state={{
                           affordable: mainTurn && controls!.affordable.has(card.id),
                           selected: controls?.selectedCard === card.id,
@@ -318,9 +336,23 @@ function SeatStatus({ seat, view, thinking, timed }: PanelProps) {
     </span>
   );
 }
-function Score({ points, change, id }: { points: number; change?: number; id?: number }) {
+function Score({
+  points,
+  change,
+  id,
+  seat,
+}: {
+  points: number;
+  change?: number;
+  id?: number;
+  seat: number;
+}) {
   return (
-    <span className="gt-score gt-delta-host" title={`${points} prestige points`}>
+    <span
+      className="gt-score gt-delta-host"
+      title={`${points} prestige points`}
+      data-fly={`score-${seat}`}
+    >
       <DeltaBadge n={change} id={id} suffix="★" />
       {points}
       <small>★</small>
@@ -362,13 +394,14 @@ function Holdings({
               <span
                 key={delta?.bonuses[seat]?.[c] ? `b-${delta.id}` : 'b'}
                 className={`gt-bonus gem-${c} ${player.bonuses[c] ? '' : 'none'} ${delta?.bonuses[seat]?.[c] ? 'flash' : ''}`}
+                data-fly={`bonus-${seat}-${c}`}
                 title={`${player.bonuses[c]} ${GEM_NAMES[c]} cards (permanent discount)`}
               >
                 <DeltaBadge n={delta?.bonuses[seat]?.[c]} id={delta?.id} />
                 {player.bonuses[c]}
               </span>
             )}
-            <span className="gt-delta-host">
+            <span className="gt-delta-host" data-fly={`tok-${seat}-${g}`}>
               <DeltaBadge n={delta?.tokens[seat]?.[g]} id={delta?.id} />
               <Token
                 gem={g}
@@ -438,6 +471,7 @@ function MyArea(props: PanelProps & { controls?: TableControls }) {
           points={player.points}
           change={props.delta?.points[props.seat]}
           id={props.delta?.id}
+          seat={props.seat}
         />
       </header>
       <MoveBubble move={props.move} id={props.delta?.id} />
@@ -458,7 +492,7 @@ function MyArea(props: PanelProps & { controls?: TableControls }) {
           <span className="gt-label">
             Reserved <span className="gt-label-count">{player.reserved.length}/3</span>
           </span>
-          <div className="gt-hand-cards">
+          <div className="gt-hand-cards" data-fly={`res-${props.seat}`}>
             {player.reserved.map((r, i) =>
               r.card ? (
                 <Anchor
@@ -468,6 +502,7 @@ function MyArea(props: PanelProps & { controls?: TableControls }) {
                 >
                   <DevelopmentCard
                     card={r.card}
+                    fly={`card-${r.card.id}`}
                     state={{
                       affordable: mainTurn && controls!.affordable.has(r.card.id),
                       selected: controls?.selectedCard === r.card.id,
@@ -510,18 +545,20 @@ function PlayerPanel(props: PanelProps) {
           points={player.points}
           change={props.delta?.points[props.seat]}
           id={props.delta?.id}
+          seat={props.seat}
         />
       </header>
       <MoveBubble move={props.move} id={props.delta?.id} />
       <Holdings player={player} size="sm" seat={seat} delta={props.delta} />
       <Stats player={player} />
       {player.reserved.length > 0 && (
-        <div className="gt-player-reserved">
+        <div className="gt-player-reserved" data-fly={`res-${seat}`}>
           {player.reserved.map((r, i) =>
             r.card ? (
               <DevelopmentCard
                 key={r.card.id}
                 card={r.card}
+                fly={`card-${r.card.id}`}
                 state={{ fresh: props.delta?.newReserved.has(r.card.id) }}
               />
             ) : (

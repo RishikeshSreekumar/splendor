@@ -14,6 +14,7 @@ import {
 import type { StoredBot, EvaluationJob } from '@/src/server/store';
 import type { ClockConfig, Mode } from '@/src/types';
 import { api, ClockFields, ErrorNotice, errorMessage } from './ui';
+import { evaluationGameCount, tableSize } from '@/src/fixtures';
 export function Arena() {
   const [bots, setBots] = useState<StoredBot[]>([]),
     [selected, setSelected] = useState<string[]>([]);
@@ -78,7 +79,8 @@ export function Arena() {
       setBusy(false);
     }
   }
-  const gameCount = selected.length * (selected.length - 1) * pairs;
+  const gameCount = evaluationGameCount(selected.length, pairs),
+    shared = tableSize(selected.length) > 2;
   return (
     <>
       <div className="page-heading">
@@ -147,6 +149,7 @@ export function Arena() {
                   <strong>{b.name}</strong>
                   <span>
                     {b.baseline ? 'Public baseline' : 'Your submission'} <b>·</b>{' '}
+                    <span className="bot-elo">Elo {Math.round(b.elo ?? 1200)}</span> <b>·</b>{' '}
                     {b.sourceHash.slice(0, 8)}
                   </span>
                 </span>
@@ -157,8 +160,9 @@ export function Arena() {
           <div className="inset-note">
             <span>Equal conditions. Useful comparisons.</span>
             <p>
-              Each pairing uses two fresh deals, with starting positions reversed and independent
-              clocks.
+              {shared
+                ? 'Four or more bots play together at four-player tables, every bot in every seat once, each game a fresh deal with independent clocks.'
+                : 'Each pairing uses two fresh deals, with starting positions reversed and independent clocks.'}
             </p>
           </div>
         </section>
@@ -182,7 +186,7 @@ export function Arena() {
             Time is added once per complete turn. Discards and noble choices use the same clock.
           </p>
           <label className="field-label">
-            Paired fixtures per opponent
+            {shared ? 'Rounds per table' : 'Paired fixtures per opponent'}
             <input
               type="number"
               min={1}
@@ -209,7 +213,7 @@ export function Arena() {
           </button>
           <p className="fine-print">
             {mode === 'ranked'
-              ? 'Invalid moves and clock expiry forfeit the game. Ratings belong to this benchmark cohort.'
+              ? 'Invalid moves and clock expiry forfeit the game. The report rates this cohort; every ranked game also updates each bot’s global Elo.'
               : 'Invalid moves receive a logged legal fallback. Assisted games never affect Elo.'}
           </p>
         </section>
