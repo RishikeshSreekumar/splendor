@@ -58,8 +58,13 @@ export function Account() {
   return (
     <>
       <div className="page-heading compact">
-        <div className="eyebrow">YOUR ACCOUNT</div>
-        <h1>A place for your players.</h1>
+        <div>
+          <div className="eyebrow">
+            <span /> YOUR ACCOUNT
+          </div>
+          <h1>A place for your players.</h1>
+          <p>Sign in to submit bots, play rated games and manage API access.</p>
+        </div>
       </div>
       <ErrorNotice error={error} />
       {notice && (

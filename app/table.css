@@ -24,17 +24,17 @@
   --s-3: 12px;
   --s-4: 16px;
   --s-5: 24px;
-  --r-sm: 7px;
-  --r-md: 12px;
+  --r-sm: var(--radius-sm);
+  --r-md: var(--radius);
   --r-lg: 18px;
   --control-h: 34px;
   /* Interaction states: gold = you can act on it, white = selected. */
   --glow: #f4d36b;
   --glow-soft: rgba(244, 211, 107, 0.5);
-  --pop-bg: #261f2b;
+  --pop-bg: var(--brand);
   --pop-ink: #f6efe5;
   --pop-muted: #b9adb5;
-  --panel-shadow: 0 1px 2px rgba(48, 36, 40, 0.06), 0 6px 18px rgba(48, 36, 40, 0.06);
+  --panel-shadow: var(--shadow-sm);
   /* Fallback card size; the table recomputes it below to fit the window. */
   --card-w: 96px;
 }
@@ -158,7 +158,7 @@ kbd {
   gap: var(--s-3);
   min-height: 56px;
   padding: var(--s-2) var(--s-3) var(--s-2) var(--s-4);
-  background: linear-gradient(100deg, #2a2230, #352a3a);
+  background: linear-gradient(100deg, var(--brand), var(--brand-2));
   color: var(--pop-ink);
   border-radius: var(--r-md);
   box-shadow:
@@ -373,15 +373,12 @@ kbd {
   gap: var(--s-4);
   align-items: start;
 }
-/* The practice table: the board on the left, every player in turn order on the right. The
-   board stays in view while a long players column scrolls. */
+/* The practice table: the board with your own area under it on the left, opponents in turn
+   order on the right. Both fit one window where the screen allows. */
 .gt-page .gt-layout {
-  --side-w: 340px;
-  --card-w: clamp(60px, min((100vw - 690px) / 5.9, (100vh - 200px) / 4.2), 132px);
-}
-.gt-page .gt-play {
-  position: sticky;
-  top: 80px;
+  --side-w: 330px;
+  --card-w: clamp(60px, min((100vw - 680px) / 5.9, (100vh - 470px) / 4.2), 128px);
+  --hand-w: clamp(60px, calc(var(--card-w) * 0.72), 86px);
 }
 .gt-play {
   display: flex;
@@ -1575,9 +1572,6 @@ kbd {
   top: 80px;
   max-height: calc(100vh - 96px);
 }
-.gt-page .gt-side > .gt-player.mine {
-  flex: none;
-}
 .gt-page .gt-others {
   flex: 1 1 auto;
   overflow-y: auto;
@@ -1631,11 +1625,38 @@ kbd {
 .gt-player .gt-score {
   font-size: 26px;
 }
-/* Your own seat: same panel, warmer and a little larger. */
+/* Your own seat: the same panel, under the board, warmer and laid out wide: gems on the
+   left, reserved cards on the right. */
 .gt-player.mine {
   background: linear-gradient(180deg, #fff8ea, var(--surface) 90px);
   border-color: #ebdcc0;
-  padding: 16px 14px 14px;
+  padding: 14px 18px 16px;
+}
+.gt-player-body,
+.gt-player-tableau {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.gt-player.mine .gt-player-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--s-5);
+  align-items: start;
+}
+.gt-player.mine .gt-player-tableau {
+  gap: 12px;
+  padding-top: 4px;
+}
+.gt-player.mine .gt-reserved {
+  border-top: 0;
+  padding: 0 0 0 var(--s-5);
+  border-left: 1px dashed var(--line);
+}
+.gt-player.mine header .gt-race {
+  flex: 1 1 120px;
+  max-width: 280px;
+  margin: 0 var(--s-2);
 }
 .gt-player.mine .gt-avatar {
   width: 36px;
@@ -1700,7 +1721,7 @@ kbd {
 }
 /* Your reserved cards are big enough to read and to click. */
 .gt-player.mine .gt-reserved-cards {
-  --card-w: min(84px, calc((var(--side-w) - 60px) / 3));
+  --card-w: var(--hand-w, 80px);
   gap: 10px;
 }
 .gt-player.mine .gt-reserved-cards .gt-back {
@@ -2359,7 +2380,7 @@ kbd {
   }
   .gt-page .gt-layout {
     --side-w: 320px;
-    --card-w: clamp(56px, min((100vw - 320px) / 5.9, (100vh - 200px) / 4.2), 124px);
+    --card-w: clamp(56px, min((100vw - 320px) / 5.9, (100vh - 470px) / 4.2), 124px);
   }
   .gt-page .gt-play {
     position: static;
@@ -2379,26 +2400,16 @@ kbd {
   .gt-others > .gt-label {
     display: none;
   }
-  .gt-side > .gt-player.mine {
-    order: -2;
-  }
-  /* Reserved-card choices open above the card instead of off the left edge. */
-  .gt-side .gt-pop.left {
-    right: auto;
-    left: -6px;
-    top: auto;
-    bottom: calc(100% + 14px);
-    transform-origin: bottom left;
-  }
-  .gt-side .gt-pop.left::before {
-    top: auto;
-    right: auto;
-    bottom: -7px;
-    left: calc(var(--card-w) / 2);
-    transform: rotate(225deg);
-  }
 }
 @media (max-width: 900px) {
+  .gt-player.mine .gt-player-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .gt-player.mine .gt-reserved {
+    border-left: 0;
+    padding: 10px 0 0;
+    border-top: 1px dashed var(--line);
+  }
   .gt-status {
     flex-wrap: wrap;
   }
@@ -2408,6 +2419,15 @@ kbd {
 }
 /* Phones: nobles above the market, the bank as a row of chips below it. */
 @media (max-width: 760px) {
+  .gt-player.mine header {
+    flex-wrap: wrap;
+  }
+  .gt-player.mine header .gt-race {
+    order: 5;
+    flex-basis: 100%;
+    max-width: none;
+    margin: 2px 0 0;
+  }
   .gt-layout,
   .gt-page .gt-layout {
     --card-w: calc((100vw - 150px) / 5.2);

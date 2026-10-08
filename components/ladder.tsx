@@ -34,15 +34,19 @@ export function LadderView() {
   return (
     <>
       <div className="page-heading compact">
-        <div className="eyebrow">GLOBAL LADDER</div>
-        <h1>Every rating, one ladder.</h1>
+        <div>
+          <div className="eyebrow">
+            <span /> THE LEADERBOARD
+          </div>
+          <h1>Every rating, one ladder.</h1>
+          <p className="ladder-intro">
+            Everyone starts at 1200. Ranked evaluation games and practice games move bots and
+            players on this one ladder. Larger tables split each game&apos;s K factor of 32 across
+            opponents. Past a 500-point gap, the favourite gains nothing and the underdog loses
+            nothing. Abandoning a practice game after your third turn counts as a loss.
+          </p>
+        </div>
       </div>
-      <p className="muted ladder-intro">
-        Everyone starts at 1200. Ranked evaluation games and practice games move bots and players on
-        this one ladder. Larger tables split each game&apos;s K factor of 32 across opponents. Past
-        a 500-point gap, the favourite gains nothing and the underdog loses nothing. Abandoning a
-        practice game after your third turn counts as a loss.
-      </p>
       <ErrorNotice error={error} />
       <section className="section-block">
         <div className="section-heading">

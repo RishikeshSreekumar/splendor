@@ -130,7 +130,7 @@ export function GameTable({
   view: Observation;
   seats: SeatLabel[];
   controls?: TableControls;
-  /** The seat played from this screen: its panel is larger and holds the human's controls. */
+  /** The seat played from this screen: its panel sits under the board and takes the clicks. */
   focusSeat?: number;
   /** Seat whose decision is pending on the server. */
   thinkingSeat?: number | null;
@@ -305,11 +305,11 @@ export function GameTable({
             </div>
           </div>
         </section>
-      </div>
-      <aside className="gt-side" aria-label="Players">
         {focusSeat !== undefined && (
           <PlayerPanel {...panelProps(focusSeat)} mine controls={controls} />
         )}
+      </div>
+      <aside className="gt-side" aria-label="Players">
         <div className="gt-others" ref={othersRef}>
           {others.length > 0 && (
             <span className="gt-label">
@@ -497,8 +497,9 @@ function Stats({ player }: { player: PlayerView }) {
   );
 }
 /**
- * One seat. Every player, the human included, gets the same panel in turn order; the
- * human's is larger, holds their reserved cards at a playable size, and takes clicks.
+ * One seat. Every player, the human included, gets the same panel. Opponents line the side
+ * column in turn order; the human's sits under the board, wider, with reserved cards at a
+ * playable size, and takes the clicks.
  */
 function PlayerPanel(props: PanelProps & { mine?: boolean; controls?: TableControls }) {
   const { seat, player, label, view, mine, controls } = props;
@@ -509,7 +510,7 @@ function PlayerPanel(props: PanelProps & { mine?: boolean; controls?: TableContr
     <section
       className={panelClass(mine ? 'gt-player mine' : 'gt-player', props)}
       data-seat={seat}
-      aria-label={`${mine ? 'Your panel' : label.name}: ${player.points} points`}
+      aria-label={`${mine ? 'Your area' : label.name}: ${player.points} points`}
     >
       <header>
         <span className={`gt-avatar tone-${seat}`}>
@@ -519,6 +520,7 @@ function PlayerPanel(props: PanelProps & { mine?: boolean; controls?: TableContr
           <strong>{label.name}</strong>
           <SeatStatus {...props} />
         </div>
+        {mine && <RaceBar points={player.points} />}
         {mine && view.status === 'playing' && (
           <span className={`gt-turn-chip ${controls ? 'live' : ''}`}>
             {controls ? 'Your turn' : 'Waiting'}
@@ -531,58 +533,62 @@ function PlayerPanel(props: PanelProps & { mine?: boolean; controls?: TableContr
           seat={seat}
         />
       </header>
-      <RaceBar points={player.points} />
+      {!mine && <RaceBar points={player.points} />}
       <MoveLine {...props} id={props.delta?.id} />
       {discarding && controls?.handPanel && <div className="gt-me-alert">{controls.handPanel}</div>}
-      <Holdings
-        player={player}
-        size={mine ? 'md' : 'sm'}
-        seat={seat}
-        delta={props.delta}
-        controls={discarding ? controls : undefined}
-      />
-      <Stats player={player} />
-      {(mine || reserved.length > 0) && (
-        <div className="gt-reserved">
-          <span className="gt-label">
-            Reserved <span className="gt-label-count">{reserved.length}/3</span>
-          </span>
-          <div className="gt-reserved-cards" data-fly={`res-${seat}`}>
-            {reserved.map((r, i) =>
-              r.card ? (
-                <Anchor
-                  key={r.card.id}
-                  placement="left top"
-                  panel={
-                    mine && controls?.selectedCard === r.card.id
-                      ? controls.selectionPanel
-                      : undefined
-                  }
-                >
-                  <DevelopmentCard
-                    card={r.card}
-                    fly={`card-${r.card.id}`}
-                    state={{
-                      affordable: mainTurn && controls!.affordable.has(r.card.id),
-                      selected: mine && controls?.selectedCard === r.card.id,
-                      fresh: props.delta?.newReserved.has(r.card.id),
-                    }}
-                    onClick={mainTurn ? () => controls!.onCard(r.card!) : undefined}
-                  />
-                </Anchor>
-              ) : (
-                <CardBack key={i} tier={r.tier} small={!mine} />
-              ),
-            )}
-            {mine &&
-              Array.from({ length: 3 - reserved.length }, (_, i) => (
-                <div className="gt-card empty slot" key={`slot-${i}`}>
-                  <span>Empty</span>
-                </div>
-              ))}
-          </div>
+      <div className="gt-player-body">
+        <div className="gt-player-tableau">
+          <Holdings
+            player={player}
+            size={mine ? 'md' : 'sm'}
+            seat={seat}
+            delta={props.delta}
+            controls={discarding ? controls : undefined}
+          />
+          <Stats player={player} />
         </div>
-      )}
+        {(mine || reserved.length > 0) && (
+          <div className="gt-reserved">
+            <span className="gt-label">
+              Reserved <span className="gt-label-count">{reserved.length}/3</span>
+            </span>
+            <div className="gt-reserved-cards" data-fly={`res-${seat}`}>
+              {reserved.map((r, i) =>
+                r.card ? (
+                  <Anchor
+                    key={r.card.id}
+                    placement="above"
+                    panel={
+                      mine && controls?.selectedCard === r.card.id
+                        ? controls.selectionPanel
+                        : undefined
+                    }
+                  >
+                    <DevelopmentCard
+                      card={r.card}
+                      fly={`card-${r.card.id}`}
+                      state={{
+                        affordable: mainTurn && controls!.affordable.has(r.card.id),
+                        selected: mine && controls?.selectedCard === r.card.id,
+                        fresh: props.delta?.newReserved.has(r.card.id),
+                      }}
+                      onClick={mainTurn ? () => controls!.onCard(r.card!) : undefined}
+                    />
+                  </Anchor>
+                ) : (
+                  <CardBack key={i} tier={r.tier} small={!mine} />
+                ),
+              )}
+              {mine &&
+                Array.from({ length: 3 - reserved.length }, (_, i) => (
+                  <div className="gt-card empty slot" key={`slot-${i}`}>
+                    <span>Empty</span>
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
+      </div>
       {view.status === 'finished' && view.winners.includes(seat) && (
         <span className="gt-chip win">Winner</span>
       )}

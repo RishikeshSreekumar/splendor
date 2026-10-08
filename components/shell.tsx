@@ -12,6 +12,9 @@ const links = [
 ] as const;
 export function Shell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
+  const isActive = (href: string) =>
+    href === '/' ? path === '/' || path.startsWith('/evaluations') : path.startsWith(href);
+  const section = links.find(([href]) => isActive(href))?.[1] ?? 'Splendor Lab';
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -30,15 +33,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
               key={href}
               href={href}
               title={label}
-              className={
-                (
-                  href === '/'
-                    ? path === '/' || path.startsWith('/evaluations')
-                    : path.startsWith(href)
-                )
-                  ? 'nav-link active'
-                  : 'nav-link'
-              }
+              className={isActive(href) ? 'nav-link active' : 'nav-link'}
+              aria-current={isActive(href) ? 'page' : undefined}
             >
               <Icon size={18} />
               <span className="nav-text">{label}</span>
@@ -65,9 +61,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
       </aside>
       <div className="main-shell">
         <header className="topbar">
-          <span>
-            THE STRATEGY WORKSPACE <span className="topbar-dot">/</span>{' '}
-            <strong>Splendor Lab</strong>
+          <span className="topbar-crumb">
+            Splendor Lab <span className="topbar-dot">/</span> <strong>{section}</strong>
           </span>
           <span className="status-pill">
             <i /> Vanilla rules
