@@ -187,23 +187,6 @@ export function GameTable({
       {flights}
       <div className="gt-play">
         <section className={`gt-surface ${surfaceState}`} aria-label="Game table">
-          <div className="gt-nobles" aria-label="Nobles">
-            {view.nobles.map((n) => {
-              const eligible = controls?.eligibleNobles.has(n.id);
-              return (
-                <NobleTile
-                  key={n.id}
-                  noble={n}
-                  fly={`noble-${n.id}`}
-                  eligible={eligible}
-                  progress={focusSeat !== undefined ? me.bonuses : undefined}
-                  onClick={
-                    eligible && phase === 'noble' ? () => controls!.onNoble(n.id) : undefined
-                  }
-                />
-              );
-            })}
-          </div>
           <div className="gt-board">
             <div className={`gt-bank ${picking ? 'picking' : ''}`} aria-label="Gem bank">
               {GEMS.map((g) => {
@@ -281,6 +264,23 @@ export function GameTable({
                 </div>
               ))}
             </div>
+            <div className="gt-nobles" aria-label="Nobles">
+              {view.nobles.map((n) => {
+                const eligible = controls?.eligibleNobles.has(n.id);
+                return (
+                  <NobleTile
+                    key={n.id}
+                    noble={n}
+                    fly={`noble-${n.id}`}
+                    eligible={eligible}
+                    progress={focusSeat !== undefined ? me.bonuses : undefined}
+                    onClick={
+                      eligible && phase === 'noble' ? () => controls!.onNoble(n.id) : undefined
+                    }
+                  />
+                );
+              })}
+            </div>
           </div>
         </section>
         {focusSeat !== undefined && <MyArea {...panelProps(focusSeat)} controls={controls} />}
@@ -354,8 +354,18 @@ function Score({
       data-fly={`score-${seat}`}
     >
       <DeltaBadge n={change} id={id} suffix="★" />
-      {points}
+      <span className="gt-score-num" key={points}>
+        {points}
+      </span>
       <small>★</small>
+    </span>
+  );
+}
+/** Progress toward the 15 points that trigger the final round. */
+function RaceBar({ points }: { points: number }) {
+  return (
+    <span className={`gt-race ${points >= 15 ? 'done' : ''}`} aria-hidden="true">
+      <span style={{ width: `${Math.min(100, (points / 15) * 100)}%` }} />
     </span>
   );
 }
@@ -383,6 +393,12 @@ function Holdings({
   const discarding = Boolean(controls);
   return (
     <div className={`gt-holdings ${size}`}>
+      {size === 'md' && (
+        <div className="gt-holding gt-holding-labels" aria-hidden="true">
+          <span>Cards</span>
+          <span>Gems</span>
+        </div>
+      )}
       {GEMS.map((g) => {
         const c = g as Color;
         const picked = controls?.returnSelection[g] ?? 0;
@@ -460,6 +476,7 @@ function MyArea(props: PanelProps & { controls?: TableControls }) {
           <strong>{label.name}</strong>
           <SeatStatus {...props} />
         </div>
+        <RaceBar points={player.points} />
         <span className={`gt-turn-chip ${controls ? 'live' : ''}`}>
           {view.status === 'finished'
             ? 'Game over'
@@ -548,6 +565,7 @@ function PlayerPanel(props: PanelProps) {
           seat={props.seat}
         />
       </header>
+      <RaceBar points={player.points} />
       <MoveBubble move={props.move} id={props.delta?.id} />
       <Holdings player={player} size="sm" seat={seat} delta={props.delta} />
       <Stats player={player} />

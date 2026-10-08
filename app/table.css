@@ -1,20 +1,19 @@
-/* Game table: a Board Game Arena–style layout. The felt surface holds nobles, decks,
-   market and bank; the side column holds player panels and the log. */
+/* Game table: a Board Game Arena–style layout. The felt holds the bank, the market and the
+   nobles side by side; your own area sits right under it, opponents and the log beside it. */
 :root {
-  --felt: #2f4a44;
-  --felt-edge: #233833;
+  --felt: #213d37;
+  --felt-hi: #315a50;
+  --felt-lo: #162b27;
   --gem-white: #f4f1ea;
   --gem-blue: #2f6fc4;
   --gem-green: #2f9a5f;
   --gem-red: #cf3b3b;
   --gem-black: #2b2629;
   --gem-gold: #e0b43c;
-  /* Fit the whole table (board + your area) in one screen height when possible. */
-  --card-w: clamp(60px, min(7.4vw, (100vh - 470px) / 5.1), 112px);
-  --tone-0: #b26535;
-  --tone-1: #487768;
-  --tone-2: #5a6fb0;
-  --tone-3: #9a4f8c;
+  --tone-0: #c0703b;
+  --tone-1: #3f8a73;
+  --tone-2: #5a6fc0;
+  --tone-3: #a0518f;
   /* Design language: every size on the table comes from these scales. */
   --t-xs: 11px;
   --t-sm: 12px;
@@ -25,16 +24,19 @@
   --s-3: 12px;
   --s-4: 16px;
   --s-5: 24px;
-  --r-sm: 6px;
-  --r-md: 10px;
-  --r-lg: 14px;
+  --r-sm: 7px;
+  --r-md: 12px;
+  --r-lg: 18px;
   --control-h: 34px;
   /* Interaction states: gold = you can act on it, white = selected. */
   --glow: #f4d36b;
-  --glow-soft: rgba(244, 211, 107, 0.55);
-  --pop-bg: #2b2330;
+  --glow-soft: rgba(244, 211, 107, 0.5);
+  --pop-bg: #261f2b;
   --pop-ink: #f6efe5;
   --pop-muted: #b9adb5;
+  --panel-shadow: 0 1px 2px rgba(48, 36, 40, 0.06), 0 6px 18px rgba(48, 36, 40, 0.06);
+  /* Fallback card size; the table recomputes it below to fit the window. */
+  --card-w: 96px;
 }
 .gem-icon {
   display: block;
@@ -93,9 +95,9 @@
   display: inline-flex;
   align-items: center;
   gap: var(--s-1);
-  font-size: var(--t-xs);
+  font-size: 10.5px;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--muted);
   line-height: 1;
@@ -117,11 +119,12 @@
   display: inline-flex;
   align-items: center;
   font-style: normal;
-  font-size: var(--t-xs);
+  font-size: 10px;
   font-weight: 700;
+  letter-spacing: 0.04em;
   line-height: 1;
   padding: 3px 6px;
-  border-radius: var(--r-sm);
+  border-radius: 999px;
   background: var(--soft);
   color: var(--ink);
 }
@@ -132,8 +135,7 @@
 }
 kbd {
   font:
-    600 10px/1 'SFMono-Regular',
-    Consolas,
+    600 10px/1 var(--font-code),
     monospace;
   padding: 2px 4px;
   border-radius: 4px;
@@ -149,44 +151,76 @@ kbd {
 }
 .gt-status {
   position: sticky;
-  top: 0;
+  top: 8px;
   z-index: 20;
   display: flex;
   align-items: center;
   gap: var(--s-3);
   min-height: 56px;
   padding: var(--s-2) var(--s-3) var(--s-2) var(--s-4);
-  background: var(--purple);
+  background: linear-gradient(100deg, #2a2230, #352a3a);
   color: var(--pop-ink);
   border-radius: var(--r-md);
-  box-shadow: 0 6px 18px rgba(30, 20, 30, 0.18);
-  border-left: 6px solid transparent;
+  box-shadow:
+    0 10px 28px rgba(30, 20, 30, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+  isolation: isolate;
+}
+/* A gold wash slides in from the left whenever it is your move. */
+.gt-status::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(100deg, #4a3a1f 0%, #3a2f22 45%, rgba(58, 47, 34, 0) 100%);
+  opacity: 0;
+  transform: translateX(-30%);
   transition:
-    background 0.25s,
-    border-color 0.25s;
+    opacity 0.5s var(--ease-out),
+    transform 0.6s var(--ease-out);
 }
-.gt-status.mine {
-  background: #3a2f22;
-  border-left-color: var(--glow);
+.gt-status::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  background: #6d6170;
+  transition: background 0.4s var(--ease-out);
 }
-.gt-status.waiting {
-  border-left-color: #6d6170;
+.gt-status.mine::before {
+  opacity: 1;
+  transform: none;
 }
-.gt-status.done {
-  border-left-color: var(--glow);
+.gt-status.mine::after,
+.gt-status.done::after {
+  background: var(--glow);
+}
+.gt-status > .gt-avatar {
+  animation: gt-status-in 0.4s var(--ease-out);
 }
 .gt-status-text {
   display: inline-flex;
   align-items: center;
   flex-wrap: wrap;
   gap: var(--s-1) 6px;
-  font-size: var(--t-md);
+  font-size: 14.5px;
   line-height: 1.4;
   min-width: 0;
   flex: 1;
+  animation: gt-status-in 0.4s var(--ease-out);
+}
+@keyframes gt-status-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
 }
 .gt-status-text strong {
   color: #fff;
+  font-weight: 700;
 }
 .gt-status.mine .gt-status-text > strong:first-child {
   color: var(--glow);
@@ -194,14 +228,19 @@ kbd {
 .gt-status-tools {
   display: inline-flex;
   align-items: center;
-  gap: var(--s-2);
+  gap: var(--s-1);
   flex: none;
 }
 .gt-round {
   font-size: var(--t-sm);
+  font-weight: 600;
   color: var(--pop-muted);
-  margin-right: var(--s-1);
+  margin-right: var(--s-2);
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 .gt-round em {
   color: #ff9d8a;
@@ -235,9 +274,18 @@ kbd {
   font-size: 13px;
   line-height: 1;
   white-space: nowrap;
+  transition:
+    background 0.18s var(--ease-out),
+    color 0.18s var(--ease-out),
+    border-color 0.18s var(--ease-out),
+    transform 0.18s var(--ease-out),
+    box-shadow 0.18s var(--ease-out);
 }
 .gt-btn:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.18);
+}
+.gt-btn:active:not(:disabled) {
+  transform: translateY(1px) scale(0.98);
 }
 .gt-btn.ghost {
   border-color: transparent;
@@ -249,16 +297,25 @@ kbd {
   background: rgba(255, 255, 255, 0.1);
 }
 .gt-btn.primary {
-  background: var(--gem-gold);
+  background: linear-gradient(180deg, #f3cb5c, var(--gem-gold));
   border-color: #c59a26;
   color: #2c2207;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.4) inset,
+    0 4px 12px rgba(224, 180, 60, 0.25);
 }
 .gt-btn.primary:hover:not(:disabled) {
-  background: #f0c752;
+  background: linear-gradient(180deg, #f8d670, #ebc04b);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.4) inset,
+    0 6px 16px rgba(224, 180, 60, 0.35);
+}
+.gt-btn.primary:disabled {
+  box-shadow: none;
 }
 .gt-btn.block {
   width: 100%;
-  height: 40px;
+  height: 42px;
   font-size: var(--t-md);
 }
 .gt-me .gt-btn:not(.primary),
@@ -284,6 +341,7 @@ kbd {
   text-decoration: underline;
   text-underline-offset: 3px;
   align-self: center;
+  transition: color 0.15s;
 }
 .gt-link:hover {
   color: #fff;
@@ -295,13 +353,29 @@ kbd {
   flex-wrap: wrap;
   min-height: 30px;
 }
+.gt-selected-bag .gt-token {
+  animation: gt-chip-in 0.3s var(--ease-spring);
+}
+@keyframes gt-chip-in {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+}
 
-/* Layout */
+/* Layout. The card width is the one size everything on the felt scales from: it is the
+   largest that fits both the window's width and its height. */
 .gt-layout {
+  --side-w: 280px;
+  --card-w: clamp(56px, min((100vw - 900px) / 5.9, (100vh - 150px) / 4.5), 112px);
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(250px, 290px);
+  grid-template-columns: minmax(0, 1fr) var(--side-w);
   gap: var(--s-4);
   align-items: start;
+}
+/* The practice table, with the sidebar folded into a rail and your own area under the felt. */
+.gt-page .gt-layout {
+  --card-w: clamp(60px, min((100vw - 620px) / 5.9, (100vh - 440px) / 4.2), 124px);
 }
 .gt-play {
   display: flex;
@@ -312,50 +386,59 @@ kbd {
 .gt-surface {
   position: relative;
   background:
-    radial-gradient(ellipse at 50% 0%, rgba(255, 255, 255, 0.08), transparent 60%), var(--felt);
-  border: 6px solid var(--felt-edge);
+    radial-gradient(120% 80% at 50% -10%, var(--felt-hi) 0%, transparent 60%),
+    radial-gradient(90% 70% at 50% 120%, var(--felt-lo) 0%, transparent 70%), var(--felt);
+  border: 1px solid #10201d;
   border-radius: var(--r-lg);
-  padding: var(--s-4);
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-4);
-  box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.25);
+  padding: 18px;
+  box-shadow:
+    inset 0 0 0 1px rgba(224, 180, 60, 0.18),
+    inset 0 0 70px rgba(0, 0, 0, 0.35),
+    0 14px 34px rgba(22, 36, 33, 0.22);
   transition:
-    border-color 0.3s,
-    box-shadow 0.3s,
-    filter 0.3s;
+    box-shadow 0.5s var(--ease-out),
+    filter 0.5s var(--ease-out);
+}
+/* A hairline inset frame, like the stitching on a game mat. */
+.gt-surface::before {
+  content: '';
+  position: absolute;
+  inset: 7px;
+  border-radius: calc(var(--r-lg) - 6px);
+  border: 1px dashed rgba(255, 255, 255, 0.07);
+  pointer-events: none;
 }
 .gt-surface.my-turn {
-  border-color: #6b5a26;
   box-shadow:
-    inset 0 0 40px rgba(0, 0, 0, 0.25),
-    0 0 0 2px var(--glow-soft);
+    inset 0 0 0 1px rgba(244, 211, 107, 0.45),
+    inset 0 0 70px rgba(0, 0, 0, 0.3),
+    0 0 0 3px var(--glow-soft),
+    0 14px 34px rgba(22, 36, 33, 0.22);
 }
 .gt-surface.waiting {
-  filter: saturate(0.85);
-}
-.gt-nobles {
-  display: flex;
-  gap: var(--s-3);
-  justify-content: center;
-  flex-wrap: wrap;
+  filter: saturate(0.88);
 }
 .gt-board {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: var(--s-4);
+  grid-template-columns: auto auto auto;
+  grid-template-areas: 'bank market nobles';
+  justify-content: center;
   align-items: center;
+  gap: 18px;
 }
 .gt-bank {
+  grid-area: bank;
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: var(--s-2);
-  padding: var(--s-3) var(--s-2);
+  gap: 10px;
+  padding: 14px 8px;
   border-radius: 40px;
-  background: rgba(0, 0, 0, 0.18);
+  background: rgba(0, 0, 0, 0.2);
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.25);
 }
 .gt-market {
+  grid-area: market;
   display: flex;
   flex-direction: column;
   gap: var(--s-3);
@@ -365,6 +448,17 @@ kbd {
   grid-template-columns: repeat(5, var(--card-w));
   gap: var(--s-3);
   justify-content: center;
+}
+.gt-nobles {
+  grid-area: nobles;
+  --noble-w: calc(var(--card-w) * 0.9);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  justify-content: center;
+}
+.gt-nobles:has(> :nth-child(5)) {
+  --noble-w: calc(var(--card-w) * 0.76);
 }
 
 /* Anchored action popovers: the choice appears beside what was clicked. */
@@ -377,7 +471,7 @@ kbd {
 .gt-pop {
   position: absolute;
   z-index: 30;
-  width: 250px;
+  width: 260px;
   display: flex;
   flex-direction: column;
   gap: var(--s-3);
@@ -386,8 +480,10 @@ kbd {
   color: var(--pop-ink);
   border-radius: var(--r-md);
   border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
-  animation: gt-pop-in 0.14s ease-out;
+  box-shadow:
+    0 24px 48px rgba(0, 0, 0, 0.45),
+    0 2px 6px rgba(0, 0, 0, 0.3);
+  animation: gt-pop-in 0.24s var(--ease-out);
   text-align: left;
 }
 .gt-pop::before {
@@ -402,9 +498,11 @@ kbd {
 }
 .gt-pop.right {
   left: calc(100% + 14px);
+  transform-origin: left center;
 }
 .gt-pop.left {
   right: calc(100% + 14px);
+  transform-origin: right center;
 }
 .gt-pop.top {
   top: -6px;
@@ -438,6 +536,7 @@ kbd {
 .gt-pop.above {
   bottom: calc(100% + 14px);
   left: -6px;
+  transform-origin: bottom left;
 }
 .gt-pop.above::before {
   bottom: -7px;
@@ -448,6 +547,7 @@ kbd {
   left: calc(100% + 14px);
   top: 50%;
   translate: 0 -50%;
+  transform-origin: left center;
 }
 .gt-pop.side::before {
   left: -7px;
@@ -457,7 +557,7 @@ kbd {
 @keyframes gt-pop-in {
   from {
     opacity: 0;
-    transform: translateY(-4px);
+    scale: 0.94;
   }
 }
 .gt-pop-head {
@@ -465,8 +565,9 @@ kbd {
   align-items: center;
   justify-content: space-between;
   gap: var(--s-2);
-  font-size: var(--t-md);
-  font-weight: 700;
+  font-family: var(--font-serif);
+  font-size: 17px;
+  font-weight: 600;
   text-transform: capitalize;
 }
 .gt-pop-points {
@@ -481,6 +582,9 @@ kbd {
   border-radius: var(--r-sm);
   background: rgba(255, 255, 255, 0.08);
   color: var(--pop-muted);
+  transition:
+    background 0.15s,
+    color 0.15s;
 }
 .gt-pop-close:hover {
   color: #fff;
@@ -506,7 +610,7 @@ kbd {
   gap: var(--s-2);
   padding: var(--s-3);
   border-radius: var(--r-sm);
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(244, 211, 107, 0.35);
 }
 .gt-pay.short {
@@ -541,7 +645,8 @@ kbd {
 }
 .gt-gem-line.md .gt-gem-count b {
   font-size: 20px;
-  font-family: Georgia, serif;
+  font-family: var(--font-serif);
+  font-weight: 600;
 }
 .gt-gem-line.sm {
   gap: var(--s-2);
@@ -566,8 +671,8 @@ kbd {
   position: relative;
   width: var(--card-w);
   aspect-ratio: 5 / 7;
-  border-radius: 9px;
-  border: 2px solid rgba(0, 0, 0, 0.25);
+  border-radius: max(7px, calc(var(--card-w) * 0.09));
+  border: 1px solid rgba(0, 0, 0, 0.35);
   padding: 0;
   display: flex;
   flex-direction: column;
@@ -575,38 +680,53 @@ kbd {
   overflow: hidden;
   text-align: left;
   color: #fff;
-  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.25) inset,
+    0 2px 3px rgba(0, 0, 0, 0.25),
+    0 6px 14px rgba(0, 0, 0, 0.22);
   transition:
-    transform 0.15s ease,
-    box-shadow 0.15s ease,
-    opacity 0.2s ease,
-    filter 0.2s ease;
+    transform 0.28s var(--ease-out),
+    box-shadow 0.28s var(--ease-out),
+    opacity 0.3s var(--ease-out),
+    filter 0.3s var(--ease-out);
   font: inherit;
 }
 .gt-card.bonus-white {
-  background: linear-gradient(160deg, #f7f4ee 0%, #d8d1c3 100%);
+  background:
+    radial-gradient(120% 70% at 30% 20%, #ffffff 0%, transparent 60%),
+    linear-gradient(160deg, #f4f0e8 0%, #d3cbbb 100%);
   color: #2f2a25;
 }
 .gt-card.bonus-blue {
-  background: linear-gradient(160deg, #4f86d4 0%, #1d3f78 100%);
+  background:
+    radial-gradient(120% 70% at 30% 20%, #6b9de0 0%, transparent 60%),
+    linear-gradient(160deg, #3f78c9 0%, #193a70 100%);
 }
 .gt-card.bonus-green {
-  background: linear-gradient(160deg, #4cae7b 0%, #1a5a37 100%);
+  background:
+    radial-gradient(120% 70% at 30% 20%, #6cc497 0%, transparent 60%),
+    linear-gradient(160deg, #3d9f6c 0%, #164f31 100%);
 }
 .gt-card.bonus-red {
-  background: linear-gradient(160deg, #de5d5d 0%, #7d1d1d 100%);
+  background:
+    radial-gradient(120% 70% at 30% 20%, #ec7c7c 0%, transparent 60%),
+    linear-gradient(160deg, #d24f4f 0%, #721a1a 100%);
 }
 .gt-card.bonus-black {
-  background: linear-gradient(160deg, #57504f 0%, #191516 100%);
+  background:
+    radial-gradient(120% 70% at 30% 20%, #6e6667 0%, transparent 60%),
+    linear-gradient(160deg, #4a4344 0%, #151213 100%);
 }
+/* A soft diagonal sheen, like light across a printed card. */
 .gt-card::after {
   content: '';
   position: absolute;
   inset: 0;
-  background: repeating-linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.05) 0 6px,
-    transparent 6px 12px
+  background: linear-gradient(
+    115deg,
+    transparent 35%,
+    rgba(255, 255, 255, 0.12) 48%,
+    transparent 62%
   );
   pointer-events: none;
 }
@@ -614,15 +734,17 @@ kbd {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 5% 7%;
-  background: rgba(255, 255, 255, 0.82);
+  padding: 6% 8%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.78));
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
   color: #231f22;
   min-height: 27%;
   position: relative;
   z-index: 1;
 }
 .gt-card-head strong {
-  font-family: Georgia, serif;
+  font-family: var(--font-serif);
+  font-weight: 700;
   font-size: calc(var(--card-w) * 0.3);
   line-height: 1;
   text-shadow: 0 1px 0 #fff;
@@ -632,6 +754,7 @@ kbd {
   place-items: center;
   width: 32%;
   aspect-ratio: 1;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.25));
 }
 .gt-card-gem.gem-white {
   color: #fff;
@@ -666,86 +789,115 @@ kbd {
 .gt-pip {
   display: inline-grid;
   place-items: center;
-  width: calc(var(--card-w) * 0.24);
-  height: calc(var(--card-w) * 0.24);
+  width: calc(var(--card-w) * 0.25);
+  height: calc(var(--card-w) * 0.25);
   min-width: 14px;
   min-height: 14px;
   border-radius: 50%;
   border: 1.5px solid;
-  font-weight: 700;
-  font-size: max(9px, calc(var(--card-w) * 0.14));
+  font-weight: 800;
+  font-size: max(9px, calc(var(--card-w) * 0.145));
   line-height: 1;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  font-variant-numeric: tabular-nums;
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 .gt-pip.card {
   border-radius: 4px;
-  width: 20px;
-  height: 26px;
-  min-width: 0;
-  min-height: 0;
-  font-size: var(--t-sm);
+  width: calc(var(--noble-w, 80px) * 0.22);
+  height: calc(var(--noble-w, 80px) * 0.29);
+  min-width: 14px;
+  min-height: 18px;
+  font-size: max(10px, calc(var(--noble-w, 80px) * 0.15));
 }
 .gt-card.clickable {
   cursor: pointer;
 }
 .gt-card.clickable:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.4);
+  transform: translateY(-4px);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.25) inset,
+    0 14px 26px rgba(0, 0, 0, 0.4);
+}
+.gt-card.clickable:active {
+  transform: translateY(-1px) scale(0.98);
 }
 /* Buyable now: a gold halo that breathes, like BGA's selectable highlight. */
 .gt-card.affordable {
   box-shadow:
     0 0 0 3px var(--glow),
     0 0 18px 4px var(--glow-soft);
-  animation: gt-glow 1.8s ease-in-out infinite;
+  animation: gt-glow 2s ease-in-out infinite;
 }
 .gt-card.affordable::before {
   content: 'BUY';
   position: absolute;
   z-index: 2;
-  right: 5%;
-  bottom: 5%;
-  padding: 2px 5px;
-  border-radius: 4px;
+  right: 6%;
+  bottom: 6%;
+  padding: 2px 6px;
+  border-radius: 999px;
   background: var(--glow);
   color: #2c2207;
   font-size: max(8px, calc(var(--card-w) * 0.1));
   font-weight: 800;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
 }
 .gt-card.dimmed:not(.selected) {
-  opacity: 0.55;
-  filter: saturate(0.7);
+  opacity: 0.5;
+  filter: saturate(0.6);
 }
 .gt-card.selected {
-  transform: translateY(-4px) scale(1.04);
+  transform: translateY(-6px) scale(1.05);
   box-shadow:
     0 0 0 3px #fff,
-    0 12px 26px rgba(0, 0, 0, 0.5);
+    0 0 0 6px rgba(244, 211, 107, 0.6),
+    0 18px 32px rgba(0, 0, 0, 0.5);
   animation: none;
   z-index: 2;
 }
+/* A card dealt into a gap turns over as it lands. */
 .gt-card.fresh {
-  animation: gt-deal 0.6s ease-out;
+  animation: gt-deal 0.65s var(--ease-out);
+}
+.gt-card.fresh.affordable {
+  animation:
+    gt-deal 0.65s var(--ease-out),
+    gt-glow 2s ease-in-out 0.65s infinite;
 }
 .gt-card.empty {
-  background: rgba(0, 0, 0, 0.12);
-  border: 2px dashed rgba(255, 255, 255, 0.18);
+  background: rgba(0, 0, 0, 0.14);
+  border: 2px dashed rgba(255, 255, 255, 0.14);
   box-shadow: none;
 }
+.gt-card.empty::after {
+  display: none;
+}
 .gt-card.empty.slot {
-  border-color: var(--line);
-  background: transparent;
+  border-color: #ddd4c6;
+  background: rgba(255, 255, 255, 0.4);
   display: grid;
   place-items: center;
-  color: var(--muted);
-  font-size: var(--t-xs);
+  place-content: center;
+  color: #b3a89b;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   text-align: center;
 }
 @keyframes gt-deal {
-  from {
-    transform: translateY(-14px) rotate(-3deg);
+  0% {
+    transform: perspective(700px) translateY(-14px) rotateY(-90deg);
     opacity: 0;
+  }
+  45% {
+    opacity: 1;
+  }
+  100% {
+    transform: perspective(700px) rotateY(0);
   }
 }
 @keyframes gt-glow {
@@ -758,104 +910,152 @@ kbd {
 
 /* Deck backs */
 .gt-back {
+  position: relative;
   width: var(--card-w);
   aspect-ratio: 5 / 7;
-  border-radius: 9px;
-  border: 2px solid rgba(0, 0, 0, 0.3);
+  border-radius: max(7px, calc(var(--card-w) * 0.09));
+  border: 1px solid rgba(0, 0, 0, 0.4);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: var(--s-1);
   color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
   box-shadow:
-    2px 2px 0 rgba(0, 0, 0, 0.25),
-    4px 4px 0 rgba(0, 0, 0, 0.15);
+    0 1px 0 rgba(255, 255, 255, 0.25) inset,
+    2px 2px 0 rgba(0, 0, 0, 0.22),
+    4px 4px 0 rgba(0, 0, 0, 0.12),
+    0 8px 16px rgba(0, 0, 0, 0.2);
   font: inherit;
+  transition:
+    transform 0.28s var(--ease-out),
+    box-shadow 0.28s var(--ease-out),
+    filter 0.28s var(--ease-out);
+}
+/* Inner frame shared by all three tiers. */
+.gt-back::before {
+  content: '';
+  position: absolute;
+  inset: 6%;
+  border-radius: calc(var(--card-w) * 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  pointer-events: none;
 }
 .gt-back.tier-1 {
-  background: radial-gradient(circle, #6fbf73, #2f6b32);
+  background:
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.06) 0 2px, transparent 2px 9px),
+    radial-gradient(circle at 50% 40%, #74c278, #2b6230);
 }
 .gt-back.tier-2 {
-  background: radial-gradient(circle, #f0c34f, #a26f0d);
+  background:
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.07) 0 2px, transparent 2px 9px),
+    radial-gradient(circle at 50% 40%, #f3c95a, #9a690c);
 }
 .gt-back.tier-3 {
-  background: radial-gradient(circle, #6c8fe0, #283f87);
+  background:
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.06) 0 2px, transparent 2px 9px),
+    radial-gradient(circle at 50% 40%, #7095e4, #243a80);
 }
 .gt-back-dots {
   font-size: 9px;
-  letter-spacing: 2px;
+  letter-spacing: 3px;
 }
 .gt-back strong {
-  font-family: Georgia, serif;
-  font-size: calc(var(--card-w) * 0.26);
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-size: calc(var(--card-w) * 0.28);
   line-height: 1;
 }
 .gt-back small {
   font-size: 9px;
-  letter-spacing: 1px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
   opacity: 0.85;
 }
 .gt-back.clickable {
   cursor: pointer;
 }
 .gt-back.clickable:hover {
-  filter: brightness(1.1);
-  transform: translateY(-2px);
+  filter: brightness(1.08);
+  transform: translateY(-3px);
 }
 .gt-back.selected {
-  box-shadow: 0 0 0 3px #fff;
+  transform: translateY(-4px);
+  box-shadow:
+    0 0 0 3px #fff,
+    0 0 0 6px rgba(244, 211, 107, 0.6),
+    0 14px 26px rgba(0, 0, 0, 0.45);
 }
 .gt-back.small {
   width: 34px;
   border-radius: 5px;
-  box-shadow: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+.gt-back.small::before {
+  inset: 3px;
+  border-radius: 3px;
 }
 
-/* Nobles */
+/* Nobles: points in the corner, the bonuses they ask for along the bottom. */
 .gt-noble {
-  width: calc(var(--card-w) * 0.95);
+  position: relative;
+  width: var(--noble-w, 80px);
   aspect-ratio: 1;
-  border-radius: 8px;
-  border: 2px solid #c9b48a;
-  background: linear-gradient(150deg, #f6ecd7, #d9c39a);
-  padding: 6px;
+  border-radius: max(7px, calc(var(--noble-w, 80px) * 0.1));
+  border: 1px solid #b89f70;
+  background:
+    radial-gradient(90% 70% at 70% 25%, rgba(255, 255, 255, 0.55), transparent 70%),
+    linear-gradient(150deg, #f6ecd7, #d6bd8f);
+  padding: 7%;
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
   justify-content: space-between;
-  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.6) inset,
+    0 2px 3px rgba(0, 0, 0, 0.2),
+    0 6px 14px rgba(0, 0, 0, 0.22);
   color: #3a2b17;
   font: inherit;
   text-align: left;
+  transition:
+    transform 0.28s var(--ease-out),
+    box-shadow 0.28s var(--ease-out);
 }
 .gt-noble-points {
-  font-family: Georgia, serif;
-  font-size: 20px;
+  font-family: var(--font-serif);
+  font-size: max(16px, calc(var(--noble-w, 80px) * 0.26));
   font-weight: 700;
+  line-height: 1;
   display: flex;
-  gap: 2px;
-  align-items: flex-start;
+  gap: 3px;
+  align-items: center;
+}
+.gt-noble-points svg {
+  color: #a27b1c;
 }
 .gt-noble-cost {
   display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
+  flex-direction: row;
+  align-items: flex-end;
   gap: 3px;
 }
 .gt-noble-req {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 3px;
+  gap: 2px;
 }
 .gt-noble-req small {
   font-size: 9px;
+  font-weight: 600;
   color: #7a6a52;
-  min-width: 20px;
   font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
 .gt-noble-req small.met {
   color: #1d6d41;
-  font-weight: 700;
+  font-weight: 800;
 }
 .gt-noble.eligible {
   box-shadow:
@@ -866,8 +1066,11 @@ kbd {
   cursor: pointer;
   animation: gt-glow 1.4s ease-in-out infinite;
 }
+.gt-noble.clickable:hover {
+  transform: translateY(-3px) scale(1.04);
+}
 
-/* Tokens */
+/* Tokens: poker chips with a dashed inner ring. */
 .gt-token {
   position: relative;
   display: inline-flex;
@@ -886,14 +1089,20 @@ kbd {
   border: 2px solid;
   box-shadow:
     0 2px 0 rgba(0, 0, 0, 0.35),
-    inset 0 0 0 3px rgba(255, 255, 255, 0.25);
+    inset 0 0 0 3px rgba(255, 255, 255, 0.22);
   transition:
-    transform 0.12s,
-    box-shadow 0.2s;
+    transform 0.25s var(--ease-spring),
+    box-shadow 0.25s var(--ease-out),
+    opacity 0.25s var(--ease-out);
 }
 .gt-token.lg .gt-token-face {
   width: 46px;
   height: 46px;
+  outline: 1.5px dashed rgba(255, 255, 255, 0.4);
+  outline-offset: -7px;
+}
+.gt-token.lg .gt-token-face.gem-white {
+  outline-color: rgba(120, 110, 95, 0.35);
 }
 .gt-token.md .gt-token-face {
   width: 30px;
@@ -918,20 +1127,26 @@ kbd {
 }
 .gt-bank .gt-token-count {
   position: absolute;
-  right: -6px;
-  bottom: -4px;
+  right: -7px;
+  bottom: -5px;
+  min-width: 19px;
+  text-align: center;
   background: #fff;
   color: #222;
   border-radius: 10px;
   font-size: var(--t-xs);
-  padding: 1px 5px;
+  font-weight: 800;
+  padding: 2px 5px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
 }
 .gt-token.clickable {
   cursor: pointer;
 }
 .gt-token.clickable:hover:not(:disabled) .gt-token-face {
-  transform: translateY(-2px);
+  transform: translateY(-3px) scale(1.06);
+}
+.gt-token.clickable:active:not(:disabled) .gt-token-face {
+  transform: translateY(0) scale(0.95);
 }
 .gt-token.available .gt-token-face {
   box-shadow:
@@ -939,7 +1154,7 @@ kbd {
     0 0 14px 3px var(--glow-soft);
 }
 .gt-bank:not(.picking) .gt-token.available .gt-token-face {
-  animation: gt-token-glow 1.8s ease-in-out infinite;
+  animation: gt-token-glow 2s ease-in-out infinite;
 }
 @keyframes gt-token-glow {
   50% {
@@ -953,15 +1168,18 @@ kbd {
   opacity: 0.35;
 }
 .gt-token.empty .gt-token-face {
-  opacity: 0.3;
+  opacity: 0.28;
   box-shadow: none;
 }
 .gt-token.empty .gt-token-count {
-  color: var(--muted);
+  color: #b8afa8;
   font-weight: 500;
 }
 .gt-token.picked .gt-token-face {
-  box-shadow: 0 0 0 3px #fff;
+  transform: translateY(-3px);
+  box-shadow:
+    0 0 0 3px #fff,
+    0 6px 12px rgba(0, 0, 0, 0.35);
 }
 .gt-token-picked {
   position: absolute;
@@ -974,12 +1192,14 @@ kbd {
   border-radius: 10px;
   padding: 1px 5px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  animation: gt-chip-in 0.3s var(--ease-spring);
 }
 
 /* Holdings: one column per color — owned cards above, tokens below. */
 .gt-holdings {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
   gap: var(--s-1);
 }
 .gt-holding {
@@ -992,7 +1212,19 @@ kbd {
   flex-direction: column;
   gap: 2px;
 }
+.gt-holdings.md .gt-holding-labels {
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 14px 0 26px;
+  margin-right: var(--s-2);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #a39889;
+}
 .gt-bonus {
+  position: relative;
   display: grid;
   place-items: center;
   width: 24px;
@@ -1002,9 +1234,14 @@ kbd {
   font-weight: 800;
   font-size: 13px;
   font-variant-numeric: tabular-nums;
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  transition: opacity 0.3s var(--ease-out);
 }
 .gt-bonus.none {
-  opacity: 0.3;
+  opacity: 0.25;
+  box-shadow: none;
 }
 .gt-bonus.placeholder {
   visibility: hidden;
@@ -1013,14 +1250,14 @@ kbd {
   font-size: var(--t-sm);
 }
 .gt-holdings.md .gt-bonus {
-  width: 34px;
-  height: 44px;
-  font-size: var(--t-lg);
+  width: 36px;
+  height: 46px;
+  font-size: 17px;
   border-radius: var(--r-sm);
 }
 .gt-holdings.md .gt-token.md .gt-token-face {
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
 }
 .gt-holdings.md .gt-token-count {
   font-size: var(--t-md);
@@ -1058,6 +1295,8 @@ kbd {
   flex: none;
   font-weight: 700;
   font-size: var(--t-sm);
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.15);
+  transition: box-shadow 0.3s var(--ease-out);
 }
 .gt-avatar.tone-0 {
   background: var(--tone-0);
@@ -1075,6 +1314,21 @@ kbd {
   background: var(--tone-3);
   color: #fff;
 }
+/* Whoever is to move wears a pulsing gold ring. */
+.on-turn .gt-avatar {
+  box-shadow:
+    0 0 0 2px var(--surface),
+    0 0 0 4px var(--glow);
+  animation: gt-ring 1.8s ease-in-out infinite;
+}
+@keyframes gt-ring {
+  50% {
+    box-shadow:
+      0 0 0 2px var(--surface),
+      0 0 0 4px var(--glow),
+      0 0 0 9px rgba(244, 211, 107, 0.25);
+  }
+}
 .gt-player-name {
   display: flex;
   flex-direction: column;
@@ -1083,6 +1337,7 @@ kbd {
 }
 .gt-player-name strong {
   font-size: var(--t-md);
+  font-weight: 700;
   line-height: 1.2;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1094,34 +1349,94 @@ kbd {
 }
 .gt-score {
   margin-left: auto;
-  font-family: Georgia, serif;
-  font-size: 28px;
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-size: 30px;
   line-height: 1;
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums lining-nums;
+  align-items: baseline;
+}
+.gt-score-num {
+  display: inline-block;
+  animation: gt-score-pop 0.6s var(--ease-spring);
+}
+@keyframes gt-score-pop {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.35);
+    color: #b8860b;
+  }
 }
 .gt-score small {
   font-size: var(--t-md);
   color: #c59a26;
-  margin-left: 1px;
+  margin-left: 2px;
+}
+/* Race to 15: the meter fills in the seat's color, gold once the final round is triggered. */
+.gt-race {
+  display: block;
+  position: relative;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(48, 44, 53, 0.08);
+  overflow: hidden;
+}
+.gt-race > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--seat-tone, var(--accent));
+  transition: width 0.9s var(--ease-out);
+}
+.gt-race.done > span {
+  background: linear-gradient(90deg, #e0b43c, #f4d36b);
+}
+.seat-0 {
+  --seat-tone: var(--tone-0);
+}
+.seat-1 {
+  --seat-tone: var(--tone-1);
+}
+.seat-2 {
+  --seat-tone: var(--tone-2);
+}
+.seat-3 {
+  --seat-tone: var(--tone-3);
 }
 
 /* Your area: wider, warmer and always directly under the board. */
 .gt-me {
-  background: linear-gradient(180deg, #fff9ec, var(--surface) 70px);
-  border: 1px solid #e8d7b4;
-  border-top: 4px solid var(--tone-0);
+  --hand-w: calc(var(--card-w) * 0.72);
+  position: relative;
+  background: linear-gradient(180deg, #fffaf0, var(--surface) 80px);
+  border: 1px solid #ebdcc0;
   border-radius: var(--r-lg);
-  padding: var(--s-3) var(--s-4) var(--s-4);
+  padding: var(--s-3) 18px 18px;
   display: flex;
   flex-direction: column;
   gap: var(--s-3);
-  transition: box-shadow 0.25s;
+  box-shadow: var(--panel-shadow);
+  overflow: hidden;
+  transition:
+    box-shadow 0.4s var(--ease-out),
+    border-color 0.4s var(--ease-out);
+}
+.gt-me::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 4px;
+  background: var(--seat-tone, var(--tone-0));
 }
 .gt-me.on-turn {
-  box-shadow: 0 0 0 2px var(--glow-soft);
-}
-.gt-me.acting {
-  animation: gt-pulse 0.9s ease-in-out;
+  border-color: #e6cf8f;
+  box-shadow:
+    0 0 0 3px var(--glow-soft),
+    var(--panel-shadow);
 }
 .gt-me-head {
   display: flex;
@@ -1129,22 +1444,32 @@ kbd {
   gap: var(--s-3);
 }
 .gt-me-head .gt-avatar {
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
+}
+.gt-me-head .gt-race {
+  flex: 1 1 120px;
+  max-width: 240px;
+  margin-left: var(--s-3);
 }
 .gt-turn-chip {
-  font-size: var(--t-xs);
+  font-size: 10.5px;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  padding: 5px 9px;
+  padding: 6px 11px;
   border-radius: 999px;
   background: var(--soft);
   color: var(--muted);
+  white-space: nowrap;
+  transition:
+    background 0.3s var(--ease-out),
+    color 0.3s var(--ease-out);
 }
 .gt-turn-chip.live {
   background: var(--glow);
   color: #2c2207;
+  box-shadow: 0 2px 10px rgba(224, 180, 60, 0.35);
 }
 .gt-me-alert {
   display: flex;
@@ -1156,6 +1481,7 @@ kbd {
   background: #3a2f22;
   color: var(--pop-ink);
   border-left: 5px solid var(--glow);
+  animation: gt-status-in 0.35s var(--ease-out);
 }
 .gt-me-alert .gt-status-text {
   flex: none;
@@ -1172,7 +1498,7 @@ kbd {
 }
 .gt-me-body {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) auto;
+  grid-template-columns: minmax(280px, 1fr) auto;
   gap: var(--s-5);
   align-items: start;
 }
@@ -1187,54 +1513,58 @@ kbd {
   border-left: 1px solid var(--line);
 }
 .gt-me-block > .gt-holdings {
-  max-width: 400px;
+  max-width: 440px;
 }
 .gt-hand-cards {
+  --card-w: var(--hand-w);
   display: flex;
-  gap: var(--s-3);
+  gap: 10px;
+}
+.gt-hand-cards .gt-card-cost {
+  gap: 2px;
+  padding: 6%;
 }
 
 /* Opponents */
 .gt-side {
   display: flex;
   flex-direction: column;
-  gap: var(--s-2);
+  gap: 10px;
   min-width: 0;
 }
 .gt-side > .gt-label {
   padding: var(--s-1) 2px 0;
 }
 .gt-player {
+  position: relative;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--line);
   border-radius: var(--r-md);
-  padding: var(--s-3);
+  padding: 14px var(--s-3) var(--s-3);
   display: flex;
   flex-direction: column;
-  gap: var(--s-3);
+  gap: 10px;
+  box-shadow: var(--panel-shadow);
+  overflow: hidden;
   transition:
-    border-color 0.2s,
-    box-shadow 0.2s;
+    border-color 0.35s var(--ease-out),
+    box-shadow 0.35s var(--ease-out),
+    transform 0.35s var(--ease-out);
 }
-.gt-player.seat-0 {
-  border-left-color: var(--tone-0);
-}
-.gt-player.seat-1 {
-  border-left-color: var(--tone-1);
-}
-.gt-player.seat-2 {
-  border-left-color: var(--tone-2);
-}
-.gt-player.seat-3 {
-  border-left-color: var(--tone-3);
+.gt-player::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 3px;
+  background: var(--seat-tone, var(--line));
 }
 .gt-player.on-turn {
-  border-color: #d8c49a;
-  box-shadow: 0 0 0 2px #efe0bb;
-}
-.gt-player.acting {
-  animation: gt-pulse 0.9s ease-in-out;
+  border-color: #dfc78f;
+  box-shadow:
+    0 0 0 2px #f1e2b9,
+    var(--panel-shadow);
 }
 .gt-player.winner {
   border-color: var(--gem-gold);
@@ -1243,17 +1573,20 @@ kbd {
 .gt-player header {
   display: flex;
   align-items: center;
-  gap: var(--s-2);
+  gap: 10px;
 }
 .gt-player .gt-score {
-  font-size: 24px;
+  font-size: 26px;
 }
 .gt-player-reserved {
   display: flex;
   gap: 6px;
-  --card-w: 44px;
+  --card-w: 46px;
   padding-top: var(--s-2);
   border-top: 1px dashed var(--line);
+}
+.gt-player-reserved .gt-card-head {
+  padding: 4px 5px;
 }
 .gt-player-reserved .gt-card-cost {
   padding: 3px;
@@ -1268,6 +1601,9 @@ kbd {
 .gt-player-reserved .gt-card-head strong {
   font-size: 13px;
 }
+.gt-player-reserved .gt-card.affordable::before {
+  display: none;
+}
 
 /* Log */
 .gt-log {
@@ -1277,18 +1613,20 @@ kbd {
   padding: var(--s-3);
   max-height: 340px;
   overflow: auto;
-  margin-top: var(--s-2);
+  margin-top: var(--s-1);
+  box-shadow: var(--panel-shadow);
+  scrollbar-width: thin;
 }
 .gt-log h3 {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: var(--t-xs);
+  font-size: 10.5px;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--muted);
-  margin-bottom: var(--s-2);
+  margin-bottom: 10px;
 }
 .gt-log ol {
   list-style: none;
@@ -1296,21 +1634,29 @@ kbd {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--s-1);
+  gap: 3px;
 }
 .gt-log li {
   font-size: var(--t-sm);
   line-height: 1.5;
-  padding: var(--s-1) 0 var(--s-1) var(--s-2);
+  padding: 5px 6px 5px 10px;
   border-left: 3px solid var(--line);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--s-1);
+  animation: gt-log-in 0.4s var(--ease-out);
+  transition: background 0.4s var(--ease-out);
+}
+@keyframes gt-log-in {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
 }
 .gt-log li:first-child {
   background: var(--soft);
-  border-radius: 0 var(--r-sm) var(--r-sm) 0;
 }
 .gt-log .muted {
   margin: 0;
@@ -1345,11 +1691,12 @@ kbd {
 }
 .gt-inline-card {
   display: inline-block;
-  padding: 0 6px;
-  border-radius: 4px;
+  padding: 1px 7px;
+  border-radius: 999px;
   font-weight: 700;
   font-size: var(--t-xs);
   color: #fff;
+  text-transform: capitalize;
 }
 .gt-inline-card.bonus-white {
   background: #d8d1c3;
@@ -1382,8 +1729,7 @@ kbd {
   padding: 1px 6px;
   border-radius: 999px;
   font:
-    800 var(--t-xs) / 1.3 Arial,
-    Helvetica,
+    800 var(--t-xs) / 1.3 var(--font-ui),
     sans-serif;
   letter-spacing: 0;
   white-space: nowrap;
@@ -1423,11 +1769,8 @@ kbd {
     transform: translateY(-18px);
   }
 }
-.gt-bonus {
-  position: relative;
-}
 .gt-bonus.flash {
-  animation: gt-flash 1.2s ease-out;
+  animation: gt-flash 1.2s var(--ease-out);
 }
 @keyframes gt-flash {
   0%,
@@ -1443,21 +1786,32 @@ kbd {
   flex-wrap: wrap;
   align-items: center;
   gap: var(--s-1);
-  padding: 6px var(--s-2);
+  padding: 6px 10px;
   border-radius: var(--r-sm);
   background: #fbf2d6;
   border: 1px solid #ecd9a2;
   font-size: var(--t-sm);
   line-height: 1.4;
-  animation: gt-pop-in 0.2s ease-out;
+  animation: gt-move-in 0.35s var(--ease-out);
+}
+@keyframes gt-move-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
 }
 .gt-player.acting,
 .gt-me.acting {
   border-color: var(--gem-gold);
   box-shadow:
     0 0 0 3px var(--glow),
-    0 8px 22px rgba(160, 120, 20, 0.25);
-  animation: gt-pulse 0.9s ease-in-out;
+    0 10px 24px rgba(160, 120, 20, 0.25);
+  animation: gt-pulse 0.9s var(--ease-out);
+}
+@keyframes gt-pulse {
+  40% {
+    transform: scale(1.012);
+  }
 }
 
 /* Game over dialog */
@@ -1465,29 +1819,50 @@ kbd {
   position: fixed;
   inset: 0;
   z-index: 50;
-  background: rgba(30, 22, 32, 0.55);
+  background: rgba(30, 22, 32, 0.5);
+  backdrop-filter: blur(5px);
   display: grid;
   place-items: center;
   padding: var(--s-4);
-  animation: gt-fade 0.3s ease-out;
+  animation: gt-fade 0.35s var(--ease-out);
 }
 .gt-modal {
   background: var(--surface);
-  border-radius: var(--r-lg);
-  padding: 28px;
-  width: min(460px, 100%);
+  border-radius: 20px;
+  padding: 30px 28px 26px;
+  width: min(480px, 100%);
   text-align: center;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.35);
+  animation: gt-modal-in 0.5s var(--ease-spring) 0.05s backwards;
+}
+@keyframes gt-modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.94);
+  }
+}
+.gt-modal h2 {
+  font-size: 30px;
+  font-weight: 600;
+  margin: 0 0 6px;
 }
 .gt-modal-icon {
   display: inline-grid;
   place-items: center;
-  width: 58px;
-  height: 58px;
+  width: 62px;
+  height: 62px;
   border-radius: 50%;
-  background: #f6e7b8;
+  background: radial-gradient(circle at 35% 30%, #fbecc0, #efd68e);
   color: #94700f;
   margin-bottom: var(--s-3);
+  box-shadow: 0 0 0 6px rgba(244, 211, 107, 0.2);
+  animation: gt-trophy 0.7s var(--ease-spring) 0.25s backwards;
+}
+@keyframes gt-trophy {
+  from {
+    transform: scale(0.3) rotate(-20deg);
+    opacity: 0;
+  }
 }
 .gt-ranking {
   list-style: none;
@@ -1499,13 +1874,26 @@ kbd {
   display: grid;
   grid-template-columns: auto 1fr auto auto;
   grid-template-rows: auto auto;
-  column-gap: 10px;
+  column-gap: 12px;
   align-items: center;
-  padding: 9px 10px;
-  border-radius: var(--r-sm);
+  padding: 10px 12px;
+  border-radius: var(--r-md);
+  animation: gt-log-in 0.45s var(--ease-out) backwards;
+}
+.gt-ranking li:nth-child(1) {
+  animation-delay: 0.3s;
+}
+.gt-ranking li:nth-child(2) {
+  animation-delay: 0.4s;
+}
+.gt-ranking li:nth-child(3) {
+  animation-delay: 0.5s;
+}
+.gt-ranking li:nth-child(4) {
+  animation-delay: 0.6s;
 }
 .gt-ranking li.won {
-  background: #fbf2d6;
+  background: linear-gradient(90deg, #fbf0cf, #fdf7e6);
 }
 .gt-ranking .gt-avatar {
   grid-row: span 2;
@@ -1518,8 +1906,9 @@ kbd {
 .gt-ranking b {
   grid-column: 3;
   grid-row: 1 / span 2;
-  font-family: Georgia, serif;
-  font-size: 22px;
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-size: 24px;
 }
 .gt-ranking span.gt-elo {
   grid-column: 4;
@@ -1569,11 +1958,6 @@ kbd {
     opacity: 0;
   }
 }
-@keyframes gt-pulse {
-  50% {
-    box-shadow: 0 0 0 4px rgba(224, 180, 60, 0.45);
-  }
-}
 
 /* Lobby */
 .gt-lobby {
@@ -1581,6 +1965,13 @@ kbd {
   grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
   gap: 18px;
   align-items: start;
+}
+.gt-lobby > .panel {
+  box-shadow: var(--panel-shadow);
+  animation: page-in 0.5s var(--ease-out) backwards;
+}
+.gt-lobby > .panel:nth-child(2) {
+  animation-delay: 0.08s;
 }
 .gt-lobby .segmented button {
   font-size: var(--t-sm);
@@ -1596,6 +1987,7 @@ kbd {
   grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 10px;
   align-items: center;
+  animation: gt-log-in 0.35s var(--ease-out);
 }
 .gt-btn.add {
   align-self: flex-start;
@@ -1650,6 +2042,7 @@ kbd {
 /* Shared table invite */
 .gt-invite {
   flex-wrap: wrap;
+  animation: gt-status-in 0.4s var(--ease-out);
 }
 .gt-invite code {
   flex: 1 1 220px;
@@ -1700,7 +2093,7 @@ kbd {
 }
 .gt-select-chevron {
   color: var(--muted);
-  transition: transform 0.15s;
+  transition: transform 0.25s var(--ease-out);
 }
 .gt-select.open .gt-select-chevron {
   transform: rotate(180deg);
@@ -1720,7 +2113,8 @@ kbd {
   box-shadow: 0 16px 36px rgba(48, 44, 53, 0.18);
   max-height: 320px;
   overflow: auto;
-  animation: gt-pop-in 0.12s ease-out;
+  transform-origin: top center;
+  animation: gt-pop-in 0.2s var(--ease-out);
 }
 .gt-select-list li {
   display: flex;
@@ -1729,6 +2123,7 @@ kbd {
   padding: var(--s-2) 10px;
   border-radius: var(--r-sm);
   cursor: pointer;
+  transition: background 0.12s;
 }
 .gt-select-list li.active {
   background: var(--soft);
@@ -1767,10 +2162,12 @@ kbd {
 }
 .gt-rules {
   margin: 18px 0;
-  padding-left: 18px;
+  padding: 14px 16px 14px 32px;
+  border-radius: var(--r-md);
+  background: #f6f1e8;
   color: var(--muted);
   font-size: 13px;
-  line-height: 1.7;
+  line-height: 1.75;
 }
 .gt-rules b {
   color: var(--ink);
@@ -1781,9 +2178,14 @@ kbd {
   gap: var(--s-2);
 }
 
-@media (max-width: 1250px) {
+/* Narrower windows: opponents and the log move under the table. */
+@media (max-width: 1100px) {
   .gt-layout {
     grid-template-columns: minmax(0, 1fr);
+    --card-w: clamp(56px, min((100vw - 520px) / 5.9, (100vh - 150px) / 4.5), 112px);
+  }
+  .gt-page .gt-layout {
+    --card-w: clamp(56px, min((100vw - 320px) / 5.9, (100vh - 440px) / 4.2), 120px);
   }
   .gt-side {
     display: grid;
@@ -1792,9 +2194,6 @@ kbd {
   .gt-side > .gt-label,
   .gt-log {
     grid-column: 1 / -1;
-  }
-  :root {
-    --card-w: clamp(56px, 11vw, 112px);
   }
 }
 @media (max-width: 900px) {
@@ -1814,13 +2213,29 @@ kbd {
     margin-left: auto;
   }
 }
+/* Phones: nobles above the market, the bank as a row of chips below it. */
 @media (max-width: 760px) {
+  .gt-layout,
+  .gt-page .gt-layout {
+    --card-w: calc((100vw - 150px) / 5.2);
+  }
   .gt-board {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'nobles' 'market' 'bank';
+    gap: var(--s-3);
+  }
+  .gt-nobles {
+    flex-direction: row;
+    --noble-w: calc(var(--card-w) * 0.9);
+  }
+  .gt-nobles:has(> :nth-child(5)) {
+    --noble-w: calc(var(--card-w) * 0.9);
   }
   .gt-bank {
     flex-direction: row;
     justify-content: center;
+    justify-self: center;
+    padding: 8px 14px;
   }
   .gt-anchor .gt-pop {
     position: fixed;
@@ -1830,33 +2245,37 @@ kbd {
     bottom: 16px;
     width: auto;
     translate: none;
+    transform-origin: bottom center;
   }
   .gt-anchor .gt-pop::before {
     display: none;
   }
   .gt-pop.side {
     left: 50%;
-    top: calc(100% + 14px);
+    top: auto;
+    bottom: calc(100% + 14px);
     translate: -50% 0;
+    transform-origin: bottom center;
   }
   .gt-pop.side::before {
     left: calc(50% - 6px);
-    top: -7px;
-    transform: rotate(45deg);
+    top: auto;
+    bottom: -7px;
+    transform: rotate(225deg);
   }
   .gt-token.lg .gt-token-face {
     width: 38px;
     height: 38px;
+    outline-offset: -6px;
   }
   .gt-surface {
     padding: 10px;
-    border-width: 4px;
+  }
+  .gt-surface::before {
+    display: none;
   }
   .gt-row {
     gap: 6px;
-  }
-  :root {
-    --card-w: calc((100vw - 120px) / 5.4);
   }
   .gt-lobby {
     grid-template-columns: minmax(0, 1fr);
@@ -1874,10 +2293,8 @@ kbd {
   .gt-card.affordable::before {
     display: none;
   }
-  .gt-nobles {
-    gap: var(--s-2);
-  }
   .gt-status {
+    top: 4px;
     padding: var(--s-2) var(--s-3);
     gap: var(--s-2);
   }
@@ -1888,15 +2305,64 @@ kbd {
     height: 28px;
     padding: 0 var(--s-2);
   }
+  .gt-me {
+    padding: var(--s-3);
+  }
+  .gt-me-head {
+    flex-wrap: wrap;
+  }
+  .gt-me-head .gt-race {
+    order: 5;
+    flex-basis: 100%;
+    max-width: none;
+    margin-left: 0;
+  }
+  .gt-holdings.md .gt-holding-labels {
+    display: none;
+  }
+}
+@media (max-width: 600px) {
+  .gt-layout,
+  .gt-page .gt-layout {
+    --card-w: calc((100vw - 64px) / 5.3);
+  }
+  .gt-status-tools .gt-btn svg {
+    display: none;
+  }
+  /* The message gets the full width; the round and buttons wrap onto their own row. */
+  .gt-status-text {
+    flex-basis: calc(100% - 48px);
+  }
+  .gt-status-tools {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  /* Nobles turn into compact landscape tiles that wrap. */
+  .gt-nobles,
+  .gt-nobles:has(> :nth-child(5)) {
+    flex-wrap: wrap;
+    gap: 6px;
+    --noble-w: 58px;
+  }
   .gt-noble {
     width: auto;
-    min-width: 66px;
     aspect-ratio: auto;
-    gap: var(--s-1);
-    padding: 5px;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
   }
-  .gt-noble-points {
-    font-size: var(--t-md);
+  .gt-round {
+    margin-right: 0;
+  }
+  .gt-holdings.md .gt-bonus {
+    width: 30px;
+    height: 40px;
+    font-size: 15px;
+  }
+  .gt-holdings.md .gt-token.md .gt-token-face {
+    width: 30px;
+    height: 30px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1911,7 +2377,12 @@ kbd {
   .gt-dots::after,
   .gt-bonus.flash,
   .gt-move,
-  .gt-modal-backdrop {
+  .gt-modal,
+  .gt-modal-backdrop,
+  .gt-status-text,
+  .gt-score-num,
+  .gt-log li,
+  .on-turn .gt-avatar {
     animation: none;
     transition: none;
   }
@@ -1934,9 +2405,12 @@ kbd {
   place-items: center;
   transform-origin: 0 0;
   will-change: transform, opacity;
-  filter: drop-shadow(0 10px 14px rgba(0, 0, 0, 0.45));
+  filter: drop-shadow(0 12px 16px rgba(0, 0, 0, 0.45));
 }
 .gt-flight .gt-card,
 .gt-flight .gt-back {
   animation: none;
+}
+.gt-flight.noble {
+  --noble-w: var(--card-w);
 }

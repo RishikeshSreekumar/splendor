@@ -9,6 +9,11 @@
   --soft: #eee6db;
   --green: #487768;
   --radius: 12px;
+  --font-serif: var(--font-display), Georgia, 'Times New Roman', serif;
+  --font-ui: var(--font-sans), system-ui, -apple-system, 'Segoe UI', Arial, sans-serif;
+  --font-code: var(--font-mono), 'SFMono-Regular', Consolas, monospace;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 * {
   box-sizing: border-box;
@@ -17,9 +22,10 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-ui);
   font-size: 14px;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 button,
 input,
@@ -66,15 +72,16 @@ p {
   margin-top: 0;
 }
 h1 {
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: var(--font-serif);
   font-weight: 400;
-  letter-spacing: -2px;
+  font-optical-sizing: auto;
+  letter-spacing: -1.5px;
   font-size: 60px;
   line-height: 1.06;
   margin-bottom: 23px;
 }
 h2 {
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: var(--font-serif);
   font-size: 25px;
   font-weight: 400;
   letter-spacing: -0.45px;
@@ -90,7 +97,7 @@ p {
 }
 code,
 .mono {
-  font-family: 'SFMono-Regular', Consolas, monospace;
+  font-family: var(--font-code);
 }
 code {
   font-size: 0.86em;
@@ -199,7 +206,7 @@ button {
   color: #c8a573;
 }
 .sidebar-note p {
-  font-family: Georgia, serif;
+  font-family: var(--font-serif);
   font-size: 24px;
   line-height: 1.3;
   letter-spacing: -0.2px;
@@ -541,7 +548,7 @@ footer {
 }
 .clock-fields input {
   font-size: 20px;
-  font-family: Georgia, serif;
+  font-family: var(--font-serif);
 }
 .field-label input {
   margin-top: 10px;
@@ -626,7 +633,7 @@ footer {
   margin-bottom: 16px;
 }
 .empty-state h3 {
-  font-family: Georgia, serif;
+  font-family: var(--font-serif);
   font-size: 21px;
   margin: 0 0 9px;
 }
@@ -767,7 +774,7 @@ td strong {
   color: #eee2cc;
   line-height: 1.85;
   padding: 20px;
-  font-family: 'SFMono-Regular', Consolas, monospace;
+  font-family: var(--font-code);
   font-size: 12px;
   tab-size: 2;
   white-space: pre;
@@ -810,7 +817,7 @@ td strong {
   color: #9b8c76;
 }
 .library-card h3 {
-  font-family: Georgia, serif;
+  font-family: var(--font-serif);
   font-size: 23px;
   margin: 15px 0 8px;
 }
@@ -879,7 +886,7 @@ td strong {
   margin-right: 12px;
 }
 .rating {
-  font-family: Georgia, serif;
+  font-family: var(--font-serif);
   font-size: 23px;
 }
 .progress-panel {
@@ -1332,4 +1339,129 @@ progress {
 .ladder-intro {
   max-width: 760px;
   margin: -8px 0 24px;
+}
+
+/* Motion and polish shared by every page. */
+.nav-link,
+.button,
+.panel,
+.segmented button,
+.bot-option,
+.library-card {
+  transition:
+    background 0.2s var(--ease-out),
+    color 0.2s var(--ease-out),
+    border-color 0.2s var(--ease-out),
+    box-shadow 0.2s var(--ease-out),
+    transform 0.2s var(--ease-out);
+}
+.button {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.nav-link {
+  font-weight: 500;
+}
+main > * {
+  animation: page-in 0.45s var(--ease-out) backwards;
+}
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* While a game is on screen the table gets the whole window: the sidebar folds into an
+   icon rail and the top bar steps aside. Navigation stays one click away. */
+.sidebar,
+.main-shell {
+  transition:
+    width 0.4s var(--ease-out),
+    min-width 0.4s var(--ease-out),
+    margin-left 0.4s var(--ease-out),
+    padding 0.4s var(--ease-out);
+}
+.app-shell:has(.gt-page) .sidebar {
+  width: 72px;
+  min-width: 72px;
+  padding: 22px 12px 20px;
+  align-items: center;
+}
+.app-shell:has(.gt-page) .brand {
+  margin: 0 0 30px;
+}
+.app-shell:has(.gt-page) .brand-text,
+.app-shell:has(.gt-page) .nav-text {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+.app-shell:has(.gt-page) .sidebar-label,
+.app-shell:has(.gt-page) .sidebar-note {
+  display: none;
+}
+.app-shell:has(.gt-page) .sidebar nav {
+  width: 100%;
+}
+.app-shell:has(.gt-page) .nav-link {
+  justify-content: center;
+  padding: 12px 0;
+}
+.app-shell:has(.gt-page) .sidebar-bottom {
+  margin-top: auto;
+  padding: 16px 0 0;
+  justify-content: center;
+  width: 100%;
+}
+.app-shell:has(.gt-page) .main-shell {
+  margin-left: 72px;
+  width: calc(100% - 72px);
+}
+.app-shell:has(.gt-page) .topbar {
+  display: none;
+}
+.app-shell:has(.gt-page) main {
+  max-width: none;
+  padding: 16px 20px 28px;
+  min-height: calc(100vh - 62px);
+}
+@media (max-width: 600px) {
+  .app-shell:has(.gt-page) .sidebar {
+    width: 100%;
+    min-width: 0;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+  }
+  .app-shell:has(.gt-page) .brand {
+    margin: 0;
+  }
+  .app-shell:has(.gt-page) .sidebar nav {
+    display: flex;
+    flex-direction: row;
+    gap: 2px;
+    overflow-x: auto;
+  }
+  .app-shell:has(.gt-page) .nav-link {
+    padding: 9px 11px;
+  }
+  .app-shell:has(.gt-page) .sidebar-bottom {
+    display: none;
+  }
+  .app-shell:has(.gt-page) .main-shell {
+    margin-left: 0;
+    width: 100%;
+  }
+  .app-shell:has(.gt-page) main {
+    padding: 10px 10px 24px;
+  }
 }

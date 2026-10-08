@@ -19,6 +19,8 @@ export type FlightPlan = { from: string; to: string } & (
 export function planFlights(a: Observation, b: Observation): FlightPlan[] {
   // A different game (new game, another replay): nothing moved, the table was reset.
   if (b.turn < a.turn || b.players.length !== a.players.length) return [];
+  // A jump of more than a round (scrubbing a replay) would launch a long queue of pieces.
+  if (b.turn - a.turn > b.players.length) return [];
   const out: FlightPlan[] = [];
   const nobles: FlightPlan[] = [];
   const ids = (p: PlayerView) => new Set(p.reserved.flatMap((r) => (r.card ? [r.card.id] : [])));

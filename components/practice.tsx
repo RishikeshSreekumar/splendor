@@ -692,6 +692,17 @@ export function Practice() {
   const bannerSeat =
     animating && caption ? caption.seat : (thinkingSeat ?? (myTurn ? human : null));
   const round = Math.floor(view.turn / seats.length) + 1;
+  // Re-keys the banner text whenever its message changes, so each new line eases in.
+  const statusKey = [
+    finished,
+    animating && caption ? caption.view.decision : '',
+    busy,
+    thinkingSeat,
+    myTurn,
+    live?.phase,
+    bagSize(take) > 0,
+    Boolean(selectedCard || selectedDeck),
+  ].join('-');
   return (
     <div className="gt-page">
       <div className={`gt-status ${tone}`} role="status" aria-live="polite">
@@ -700,7 +711,7 @@ export function Practice() {
             <SeatAvatar seat={seats[bannerSeat]} size={15} />
           </span>
         )}
-        <span className="gt-status-text">
+        <span className="gt-status-text" key={statusKey}>
           {finished ? (
             <ResultLine view={live!} seats={seats} human={human} />
           ) : animating && caption ? (
