@@ -3,6 +3,8 @@ node_modules
 storage
 results
 .env*
+# Committed, blank-valued template; Vercel's build references it.
+!.env.example
 .wrangler
 cloudflare/.wrangler
 *.tsbuildinfo
