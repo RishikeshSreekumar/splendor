@@ -1,10 +1,10 @@
 'use client';
-import { useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Bot, Clock3, Crown, Layers, Loader2, User } from 'lucide-react';
 import type { Card, Color, Gem, Observation, PlayerView } from '@/src/types';
 import { formatClock } from '../ui';
 import { planFlights, useFlights, type FlightPlan } from './flights';
-import { CardBack, DevelopmentCard, GEMS, GEM_NAMES, NobleTile, Token } from './pieces';
+import { CardBack, DevelopmentCard, GemIcon, GEMS, GEM_NAMES, NobleTile, Token } from './pieces';
 /** What the human may click right now. Omit for a read-only table (replays). */
 export interface TableControls {
   bankSelection: Partial<Record<Gem, number>>;
@@ -121,6 +121,7 @@ export function GameTable({
   thinkingSeat = null,
   actingSeat = null,
   actingLabel,
+  lastMoves,
   freshCards,
   timedSeats,
   aside,
@@ -129,7 +130,7 @@ export function GameTable({
   view: Observation;
   seats: SeatLabel[];
   controls?: TableControls;
-  /** The seat played from this screen: drawn as a large area under the board. */
+  /** The seat played from this screen: its panel is larger and holds the human's controls. */
   focusSeat?: number;
   /** Seat whose decision is pending on the server. */
   thinkingSeat?: number | null;
@@ -137,6 +138,8 @@ export function GameTable({
   actingSeat?: number | null;
   /** Short description of the move being shown, drawn as a bubble on the actor's panel. */
   actingLabel?: ReactNode;
+  /** Each seat's most recent move, kept on its panel until that seat moves again. */
+  lastMoves?: ReactNode[];
   freshCards?: Set<string>;
   /** Seats that play on a clock; others show "untimed". */
   timedSeats?: Set<number>;
@@ -179,31 +182,33 @@ export function GameTable({
     thinking: thinkingSeat === i,
     acting: actingSeat === i,
     move: actingSeat === i ? actingLabel : undefined,
+    last: lastMoves?.[i],
+    tracked: Boolean(lastMoves),
     timed: timedSeats?.has(i) ?? true,
     delta,
   });
+  // Opponents follow you in the order they play, so the column reads as the turn order.
+  const others = view.players
+    .map((_, i) => (focusSeat === undefined ? i : (focusSeat + 1 + i) % view.players.length))
+    .filter((i) => i !== focusSeat);
+  // When the opponents list scrolls (3–4 players), keep whoever is moving in view.
+  const othersRef = useRef<HTMLDivElement>(null);
+  const spotlight =
+    actingSeat ?? thinkingSeat ?? (view.status === 'playing' ? view.currentPlayer : null);
+  useEffect(() => {
+    const box = othersRef.current;
+    if (!box || spotlight === null || box.scrollHeight <= box.clientHeight + 1) return;
+    const el = box.querySelector<HTMLElement>(`[data-seat="${spotlight}"]`);
+    if (!el) return;
+    const top = el.offsetTop; // the list is the panels' offset parent
+    if (top < box.scrollTop || top + el.offsetHeight > box.scrollTop + box.clientHeight)
+      box.scrollTo({ top: Math.max(0, top - 24), behavior: 'smooth' });
+  }, [spotlight]);
   return (
     <div className="gt-layout" ref={root}>
       {flights}
       <div className="gt-play">
         <section className={`gt-surface ${surfaceState}`} aria-label="Game table">
-          <div className="gt-nobles" aria-label="Nobles">
-            {view.nobles.map((n) => {
-              const eligible = controls?.eligibleNobles.has(n.id);
-              return (
-                <NobleTile
-                  key={n.id}
-                  noble={n}
-                  fly={`noble-${n.id}`}
-                  eligible={eligible}
-                  progress={focusSeat !== undefined ? me.bonuses : undefined}
-                  onClick={
-                    eligible && phase === 'noble' ? () => controls!.onNoble(n.id) : undefined
-                  }
-                />
-              );
-            })}
-          </div>
           <div className="gt-board">
             <div className={`gt-bank ${picking ? 'picking' : ''}`} aria-label="Gem bank">
               {GEMS.map((g) => {
@@ -281,17 +286,40 @@ export function GameTable({
                 </div>
               ))}
             </div>
+            <div className="gt-nobles" aria-label="Nobles">
+              {view.nobles.map((n) => {
+                const eligible = controls?.eligibleNobles.has(n.id);
+                return (
+                  <NobleTile
+                    key={n.id}
+                    noble={n}
+                    fly={`noble-${n.id}`}
+                    eligible={eligible}
+                    progress={focusSeat !== undefined ? me.bonuses : undefined}
+                    onClick={
+                      eligible && phase === 'noble' ? () => controls!.onNoble(n.id) : undefined
+                    }
+                  />
+                );
+              })}
+            </div>
           </div>
         </section>
-        {focusSeat !== undefined && <MyArea {...panelProps(focusSeat)} controls={controls} />}
       </div>
-      <aside className="gt-side">
-        {focusSeat !== undefined && view.players.length > 1 && (
-          <span className="gt-label">Opponents</span>
+      <aside className="gt-side" aria-label="Players">
+        {focusSeat !== undefined && (
+          <PlayerPanel {...panelProps(focusSeat)} mine controls={controls} />
         )}
-        {view.players.map((_, i) =>
-          i === focusSeat ? null : <PlayerPanel key={i} {...panelProps(i)} />,
-        )}
+        <div className="gt-others" ref={othersRef}>
+          {others.length > 0 && (
+            <span className="gt-label">
+              {focusSeat !== undefined ? 'Opponents · in turn order after you' : 'Players'}
+            </span>
+          )}
+          {others.map((i) => (
+            <PlayerPanel key={i} {...panelProps(i)} />
+          ))}
+        </div>
         {aside}
       </aside>
     </div>
@@ -306,13 +334,26 @@ interface PanelProps {
   acting: boolean;
   timed: boolean;
   move?: ReactNode;
+  /** The seat's previous move, shown quietly while nothing is being played. */
+  last?: ReactNode;
+  /** Whether moves are tracked at all (practice); replays show only the acting move. */
+  tracked?: boolean;
   delta?: Delta;
 }
-function MoveBubble({ move, id }: { move?: ReactNode; id?: number }) {
-  if (!move) return null;
+/** The move being played (highlighted), or else the seat's last move, so no move goes unseen. */
+function MoveLine({ move, last, tracked, view, id }: PanelProps & { id?: number }) {
+  if (move)
+    return (
+      <div className="gt-move live" key={`live-${id}`} role="note">
+        {move}
+      </div>
+    );
+  // Before a seat's first move say so; a resumed game simply starts the line empty.
+  if (!last && (!tracked || view.turn >= view.players.length)) return null;
   return (
-    <div className="gt-move" key={id} role="note">
-      {move}
+    <div className="gt-move last" role="note">
+      <span className="gt-move-tag">Last move</span>
+      {last ?? <span className="gt-move-none">None yet</span>}
     </div>
   );
 }
@@ -330,9 +371,7 @@ function SeatStatus({ seat, view, thinking, timed }: PanelProps) {
         <>
           <Clock3 size={12} /> {formatClock(view.clock.remainingMs[seat])}
         </>
-      ) : (
-        'untimed'
-      )}
+      ) : null}
     </span>
   );
 }
@@ -354,8 +393,18 @@ function Score({
       data-fly={`score-${seat}`}
     >
       <DeltaBadge n={change} id={id} suffix="★" />
-      {points}
+      <span className="gt-score-num" key={points}>
+        {points}
+      </span>
       <small>★</small>
+    </span>
+  );
+}
+/** Progress toward the 15 points that trigger the final round. */
+function RaceBar({ points }: { points: number }) {
+  return (
+    <span className={`gt-race ${points >= 15 ? 'done' : ''}`} aria-hidden="true">
+      <span style={{ width: `${Math.min(100, (points / 15) * 100)}%` }} />
     </span>
   );
 }
@@ -366,7 +415,10 @@ function panelClass(base: string, { seat, view, acting }: PanelProps) {
     .filter(Boolean)
     .join(' ');
 }
-/** One column per color: owned cards (permanent discount) above held tokens. */
+/**
+ * One unit per color: a card-shaped tile counting the cards owned (a permanent discount),
+ * with the gem chip held in that color tucked into its corner. Gold is a chip on its own.
+ */
 function Holdings({
   player,
   size,
@@ -386,26 +438,28 @@ function Holdings({
       {GEMS.map((g) => {
         const c = g as Color;
         const picked = controls?.returnSelection[g] ?? 0;
+        const owned = g === 'gold' ? 0 : player.bonuses[c];
+        const idle = !owned && !player.tokens[g];
         return (
-          <div className={`gt-holding ${g === 'gold' ? 'gold' : ''}`} key={g}>
-            {g === 'gold' ? (
-              <span className="gt-bonus placeholder" />
-            ) : (
+          <div className={`gt-holding ${g === 'gold' ? 'gold' : ''} ${idle ? 'idle' : ''}`} key={g}>
+            {g !== 'gold' && (
               <span
                 key={delta?.bonuses[seat]?.[c] ? `b-${delta.id}` : 'b'}
-                className={`gt-bonus gem-${c} ${player.bonuses[c] ? '' : 'none'} ${delta?.bonuses[seat]?.[c] ? 'flash' : ''}`}
+                className={`gt-bonus gem-${c} ${owned ? '' : 'none'} ${delta?.bonuses[seat]?.[c] ? 'flash' : ''}`}
                 data-fly={`bonus-${seat}-${c}`}
-                title={`${player.bonuses[c]} ${GEM_NAMES[c]} cards (permanent discount)`}
+                title={`${owned} ${GEM_NAMES[c]} cards (permanent discount)`}
               >
                 <DeltaBadge n={delta?.bonuses[seat]?.[c]} id={delta?.id} />
-                {player.bonuses[c]}
+                <GemIcon gem={c} size={size === 'md' ? 11 : 8} />
+                <b>{owned}</b>
               </span>
             )}
-            <span className="gt-delta-host" data-fly={`tok-${seat}-${g}`}>
+            <span className="gt-delta-host gt-holding-chip" data-fly={`tok-${seat}-${g}`}>
               <DeltaBadge n={delta?.tokens[seat]?.[g]} id={delta?.id} />
               <Token
                 gem={g}
                 size={size === 'md' ? 'md' : 'sm'}
+                countInside
                 count={player.tokens[g] - picked}
                 selected={picked}
                 empty={!player.tokens[g]}
@@ -442,129 +496,91 @@ function Stats({ player }: { player: PlayerView }) {
     </div>
   );
 }
-/** The human's own seat: bigger, always under the board, with reserved cards inline. */
-function MyArea(props: PanelProps & { controls?: TableControls }) {
-  const { player, label, view, controls } = props;
-  const mainTurn = Boolean(controls) && view.phase === 'main';
-  const discarding = Boolean(controls) && view.phase === 'discard';
+/**
+ * One seat. Every player, the human included, gets the same panel in turn order; the
+ * human's is larger, holds their reserved cards at a playable size, and takes clicks.
+ */
+function PlayerPanel(props: PanelProps & { mine?: boolean; controls?: TableControls }) {
+  const { seat, player, label, view, mine, controls } = props;
+  const mainTurn = Boolean(mine && controls) && view.phase === 'main';
+  const discarding = Boolean(mine && controls) && view.phase === 'discard';
+  const reserved = player.reserved;
   return (
     <section
-      className={panelClass('gt-me', props)}
-      aria-label={`Your area: ${player.points} points`}
+      className={panelClass(mine ? 'gt-player mine' : 'gt-player', props)}
+      data-seat={seat}
+      aria-label={`${mine ? 'Your panel' : label.name}: ${player.points} points`}
     >
-      <header className="gt-me-head">
-        <span className={`gt-avatar tone-${props.seat}`}>
-          <User size={16} />
+      <header>
+        <span className={`gt-avatar tone-${seat}`}>
+          {mine || label.kind === 'human' ? <User size={15} /> : <Bot size={15} />}
         </span>
         <div className="gt-player-name">
           <strong>{label.name}</strong>
           <SeatStatus {...props} />
         </div>
-        <span className={`gt-turn-chip ${controls ? 'live' : ''}`}>
-          {view.status === 'finished'
-            ? 'Game over'
-            : controls
-              ? 'Your turn'
-              : `Waiting for opponents`}
-        </span>
+        {mine && view.status === 'playing' && (
+          <span className={`gt-turn-chip ${controls ? 'live' : ''}`}>
+            {controls ? 'Your turn' : 'Waiting'}
+          </span>
+        )}
         <Score
           points={player.points}
-          change={props.delta?.points[props.seat]}
+          change={props.delta?.points[seat]}
           id={props.delta?.id}
-          seat={props.seat}
+          seat={seat}
         />
       </header>
-      <MoveBubble move={props.move} id={props.delta?.id} />
+      <RaceBar points={player.points} />
+      <MoveLine {...props} id={props.delta?.id} />
       {discarding && controls?.handPanel && <div className="gt-me-alert">{controls.handPanel}</div>}
-      <div className="gt-me-body">
-        <div className="gt-me-block">
-          <span className="gt-label">Cards &amp; gems</span>
-          <Holdings
-            player={player}
-            size="md"
-            seat={props.seat}
-            delta={props.delta}
-            controls={discarding ? controls : undefined}
-          />
-          <Stats player={player} />
-        </div>
-        <div className="gt-me-block reserved">
+      <Holdings
+        player={player}
+        size={mine ? 'md' : 'sm'}
+        seat={seat}
+        delta={props.delta}
+        controls={discarding ? controls : undefined}
+      />
+      <Stats player={player} />
+      {(mine || reserved.length > 0) && (
+        <div className="gt-reserved">
           <span className="gt-label">
-            Reserved <span className="gt-label-count">{player.reserved.length}/3</span>
+            Reserved <span className="gt-label-count">{reserved.length}/3</span>
           </span>
-          <div className="gt-hand-cards" data-fly={`res-${props.seat}`}>
-            {player.reserved.map((r, i) =>
+          <div className="gt-reserved-cards" data-fly={`res-${seat}`}>
+            {reserved.map((r, i) =>
               r.card ? (
                 <Anchor
                   key={r.card.id}
-                  placement="above"
-                  panel={controls?.selectedCard === r.card.id ? controls.selectionPanel : undefined}
+                  placement="left top"
+                  panel={
+                    mine && controls?.selectedCard === r.card.id
+                      ? controls.selectionPanel
+                      : undefined
+                  }
                 >
                   <DevelopmentCard
                     card={r.card}
                     fly={`card-${r.card.id}`}
                     state={{
                       affordable: mainTurn && controls!.affordable.has(r.card.id),
-                      selected: controls?.selectedCard === r.card.id,
+                      selected: mine && controls?.selectedCard === r.card.id,
                       fresh: props.delta?.newReserved.has(r.card.id),
                     }}
                     onClick={mainTurn ? () => controls!.onCard(r.card!) : undefined}
                   />
                 </Anchor>
               ) : (
-                <CardBack key={i} tier={r.tier} />
+                <CardBack key={i} tier={r.tier} small={!mine} />
               ),
             )}
-            {Array.from({ length: 3 - player.reserved.length }, (_, i) => (
-              <div className="gt-card empty slot" key={`slot-${i}`}>
-                <span>Empty</span>
-              </div>
-            ))}
+            {mine &&
+              Array.from({ length: 3 - reserved.length }, (_, i) => (
+                <div className="gt-card empty slot" key={`slot-${i}`}>
+                  <span>Empty</span>
+                </div>
+              ))}
           </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-function PlayerPanel(props: PanelProps) {
-  const { seat, player, label, view } = props;
-  return (
-    <section
-      className={panelClass('gt-player', props)}
-      aria-label={`${label.name}: ${player.points} points`}
-    >
-      <header>
-        <span className={`gt-avatar tone-${seat}`}>
-          {label.kind === 'human' ? <User size={15} /> : <Bot size={15} />}
-        </span>
-        <div className="gt-player-name">
-          <strong>{label.name}</strong>
-          <SeatStatus {...props} />
-        </div>
-        <Score
-          points={player.points}
-          change={props.delta?.points[props.seat]}
-          id={props.delta?.id}
-          seat={props.seat}
-        />
-      </header>
-      <MoveBubble move={props.move} id={props.delta?.id} />
-      <Holdings player={player} size="sm" seat={seat} delta={props.delta} />
-      <Stats player={player} />
-      {player.reserved.length > 0 && (
-        <div className="gt-player-reserved" data-fly={`res-${seat}`}>
-          {player.reserved.map((r, i) =>
-            r.card ? (
-              <DevelopmentCard
-                key={r.card.id}
-                card={r.card}
-                fly={`card-${r.card.id}`}
-                state={{ fresh: props.delta?.newReserved.has(r.card.id) }}
-              />
-            ) : (
-              <CardBack key={i} tier={r.tier} small />
-            ),
-          )}
         </div>
       )}
       {view.status === 'finished' && view.winners.includes(seat) && (

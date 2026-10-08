@@ -145,6 +145,9 @@ export function Practice() {
   }>();
   const [caption, setCaption] = useState<PracticeStep | null>(null);
   const [log, setLog] = useState<LogEntry[]>([]);
+  /** Each seat's latest move that has been shown, kept on its panel. */
+  const [lastMoves, setLastMoves] = useState<Record<number, PracticeStep>>({});
+  const [logOpen, setLogOpen] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [animating, setAnimating] = useState(false);
@@ -188,10 +191,6 @@ export function Practice() {
       const token = ++playToken.current;
       const delay = STEP_DELAY[settings.speed];
       setNotices(next.notices);
-      setLog((old) => [
-        ...next.steps.map((step) => ({ key: `${next.id}-${step.view.decision}`, step })).reverse(),
-        ...old,
-      ]);
       if (next.steps.length) setAnimating(true);
       let previous = from ?? shown?.view;
       for (const [i, step] of next.steps.entries()) {
@@ -205,6 +204,9 @@ export function Practice() {
         );
         setShown({ view: step.view, acting: step.seat, fresh });
         setCaption(step);
+        // The log and the seat's "last move" follow the playback, never running ahead of it.
+        setLog((old) => [{ key: `${next.id}-${step.view.decision}`, step }, ...old]);
+        setLastMoves((old) => ({ ...old, [step.seat]: step }));
         previous = step.view;
         if (step.seat !== next.humanSeat) await sleep(delay);
         // The human's move was already drawn optimistically, but only the server knows the
@@ -260,6 +262,7 @@ export function Practice() {
       }
       clearSelection();
       setLog([]);
+      setLastMoves({});
       setCaption(null);
       setSeatToken(undefined);
       setJoining(undefined);
@@ -345,6 +348,7 @@ export function Practice() {
       showTableUrl(id);
       setSession(game);
       setShown({ view: game.view, acting: null, fresh: new Set() });
+      setLastMoves({});
       setSetupOpen(false);
       setNotices([`You joined as ${name}.`]);
     } catch (e) {
@@ -608,6 +612,12 @@ export function Practice() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   });
+  useEffect(() => {
+    if (!logOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setLogOpen(false);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [logOpen]);
   // While the server works, the seat to move in the shown (possibly optimistic) view is thinking.
   const thinkingSeat =
     busy && view && session && view.status === 'playing' && view.currentPlayer !== session.humanSeat
@@ -692,6 +702,17 @@ export function Practice() {
   const bannerSeat =
     animating && caption ? caption.seat : (thinkingSeat ?? (myTurn ? human : null));
   const round = Math.floor(view.turn / seats.length) + 1;
+  // Re-keys the banner text whenever its message changes, so each new line eases in.
+  const statusKey = [
+    finished,
+    animating && caption ? caption.view.decision : '',
+    busy,
+    thinkingSeat,
+    myTurn,
+    live?.phase,
+    bagSize(take) > 0,
+    Boolean(selectedCard || selectedDeck),
+  ].join('-');
   return (
     <div className="gt-page">
       <div className={`gt-status ${tone}`} role="status" aria-live="polite">
@@ -700,7 +721,7 @@ export function Practice() {
             <SeatAvatar seat={seats[bannerSeat]} size={15} />
           </span>
         )}
-        <span className="gt-status-text">
+        <span className="gt-status-text" key={statusKey}>
           {finished ? (
             <ResultLine view={live!} seats={seats} human={human} />
           ) : animating && caption ? (
@@ -731,7 +752,7 @@ export function Practice() {
             )
           ) : discarding ? (
             <>
-              <strong>Too many gems.</strong> Return {toReturn} from your area below.
+              <strong>Too many gems.</strong> Return {toReturn} by clicking gems in your panel.
             </>
           ) : live!.phase === 'noble' ? (
             <>
@@ -759,6 +780,16 @@ export function Practice() {
             Round {round}
             {view.finalRound && <em> · final round</em>}
           </span>
+          <button
+            className={`gt-btn ghost ${logOpen ? 'on' : ''}`}
+            onClick={() => setLogOpen(!logOpen)}
+            aria-expanded={logOpen}
+            aria-controls="game-log"
+            title="Show every move so far"
+          >
+            <ScrollText size={14} /> Log
+            {log.length > 0 && <span className="gt-count">{log.length}</span>}
+          </button>
           <button
             className="gt-btn ghost"
             onClick={() => setSetupOpen(true)}
@@ -790,14 +821,15 @@ export function Practice() {
         controls={controls}
         thinkingSeat={animating ? null : thinkingSeat}
         actingSeat={shown?.acting ?? null}
-        actingLabel={
-          animating && caption ? <StepText step={caption} name={names[caption.seat]} /> : undefined
-        }
+        actingLabel={animating && caption ? <StepText step={caption} /> : undefined}
+        lastMoves={seats.map((_, i) =>
+          lastMoves[i] ? <StepText key={i} step={lastMoves[i]} /> : undefined,
+        )}
         freshCards={shown?.fresh}
         timedSeats={new Set(seats.flatMap((s, i) => (s.kind === 'bot' ? [i] : [])))}
         flightMs={FLIGHT_MS[settings.speed]}
-        aside={<GameLog log={log} names={names} />}
       />
+      <GameLog log={log} names={names} open={logOpen} onClose={() => setLogOpen(false)} />
       {finished && (
         <GameOver
           view={live!}
@@ -1133,17 +1165,39 @@ function EloChange({ rating }: { rating?: SeatRating }) {
     </span>
   );
 }
-function GameLog({ log, names }: { log: LogEntry[]; names: string[] }) {
+/** Every move so far, newest first, in a drawer that stays out of the way until asked for. */
+function GameLog({
+  log,
+  names,
+  open,
+  onClose,
+}: {
+  log: LogEntry[];
+  names: string[];
+  open: boolean;
+  onClose: () => void;
+}) {
   return (
-    <section className="gt-log" aria-label="Game log">
-      <h3>
-        <ScrollText size={14} /> Game log
-      </h3>
+    <aside
+      id="game-log"
+      className={`gt-log ${open ? 'open' : ''}`}
+      aria-label="Game log"
+      aria-hidden={!open}
+      inert={!open}
+    >
+      <header>
+        <h3>
+          <ScrollText size={14} /> Game log
+        </h3>
+        <button className="gt-pop-close" onClick={onClose} aria-label="Close the log (Esc)">
+          <X size={14} />
+        </button>
+      </header>
       {log.length === 0 ? (
         <p className="muted">Moves will appear here.</p>
       ) : (
         <ol>
-          {log.slice(0, 80).map(({ key, step }) => (
+          {log.slice(0, 120).map(({ key, step }) => (
             <li key={key} className={`tone-border-${step.seat}`}>
               <StepText step={step} name={names[step.seat]} />
               {step.assisted && <em className="gt-assisted"> (fallback)</em>}
@@ -1151,7 +1205,7 @@ function GameLog({ log, names }: { log: LogEntry[]; names: string[] }) {
           ))}
         </ol>
       )}
-    </section>
+    </aside>
   );
 }
 const levelOf = (b?: StoredBot) => (b?.baseline ? LEVELS[b.name] : undefined);

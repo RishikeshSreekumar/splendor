@@ -19,7 +19,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           <span className="brand-icon">
             <Gem size={25} />
           </span>
-          <span>
+          <span className="brand-text">
             SPLENDOR<span className="brand-sub">STRATEGY LAB</span>
           </span>
         </Link>
@@ -29,6 +29,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             <Link
               key={href}
               href={href}
+              title={label}
               className={
                 (
                   href === '/'
@@ -40,7 +41,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
               }
             >
               <Icon size={18} />
-              {label}
+              <span className="nav-text">{label}</span>
             </Link>
           ))}
         </nav>
@@ -59,7 +60,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           target="_blank"
           rel="noreferrer"
         >
-          Official game rules <ArrowUpRight size={15} />
+          <span className="nav-text">Official game rules</span> <ArrowUpRight size={15} />
         </a>
       </aside>
       <div className="main-shell">

@@ -31,28 +31,38 @@ export function stepCard(step: PracticeStep): Card | undefined {
   const p = step.view.players[step.seat];
   return p.cards.find((c) => c.id === id) ?? p.reserved.find((r) => r.card?.id === id)?.card;
 }
-/** Human-readable log line: "Greedy bought T2 ruby · 2★ for 3× sapphire". */
-export function StepText({ step, name }: { step: PracticeStep; name: string }) {
+/**
+ * Human-readable log line: "Greedy bought T2 ruby · 2★ for 3× sapphire". Without a name
+ * it reads as a caption on the player's own panel: "Bought T2 ruby · 2★ for 3× sapphire".
+ */
+export function StepText({ step, name }: { step: PracticeStep; name?: string }) {
   const a = step.action;
-  const who = <strong>{name}</strong>;
+  const verb = (word: string) =>
+    name === undefined ? (
+      <span className="gt-step-verb">{word[0].toUpperCase() + word.slice(1)}</span>
+    ) : (
+      <>
+        <strong>{name}</strong> {word}
+      </>
+    );
   switch (a.type) {
     case 'take':
       return (
         <>
-          {who} took <Bag bag={a.tokens} />
+          {verb('took')} <Bag bag={a.tokens} />
         </>
       );
     case 'discard':
       return (
         <>
-          {who} returned <Bag bag={a.tokens} />
+          {verb('returned')} <Bag bag={a.tokens} />
         </>
       );
     case 'buy': {
       const free = GEMS.every((g) => !a.payment[g]);
       return (
         <>
-          {who} bought <CardName card={stepCard(step)} />
+          {verb('bought')} <CardName card={stepCard(step)} />
           {free ? (
             ' for free'
           ) : (
@@ -67,14 +77,14 @@ export function StepText({ step, name }: { step: PracticeStep; name: string }) {
     case 'reserve':
       return a.cardId ? (
         <>
-          {who} reserved <CardName card={stepCard(step)} />
+          {verb('reserved')} <CardName card={stepCard(step)} />
         </>
       ) : (
         <>
-          {who} reserved a hidden tier {a.tier} card
+          {verb('reserved')} a hidden tier {a.tier} card
         </>
       );
     case 'noble':
-      return <>{who} was visited by a noble (+3★)</>;
+      return <>{verb('was visited by a noble')} (+3★)</>;
   }
 }
