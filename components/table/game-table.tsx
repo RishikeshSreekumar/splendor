@@ -4,7 +4,7 @@ import { Bot, Clock3, Crown, Layers, Loader2, User } from 'lucide-react';
 import type { Card, Color, Gem, Observation, PlayerView } from '@/src/types';
 import { formatClock } from '../ui';
 import { planFlights, useFlights, type FlightPlan } from './flights';
-import { CardBack, DevelopmentCard, GEMS, GEM_NAMES, NobleTile, Token } from './pieces';
+import { CardBack, DevelopmentCard, GemIcon, GEMS, GEM_NAMES, NobleTile, Token } from './pieces';
 /** What the human may click right now. Omit for a read-only table (replays). */
 export interface TableControls {
   bankSelection: Partial<Record<Gem, number>>;
@@ -415,7 +415,10 @@ function panelClass(base: string, { seat, view, acting }: PanelProps) {
     .filter(Boolean)
     .join(' ');
 }
-/** One column per color: owned cards (permanent discount) above held tokens. */
+/**
+ * One unit per color: a card-shaped tile counting the cards owned (a permanent discount),
+ * with the gem chip held in that color tucked into its corner. Gold is a chip on its own.
+ */
 function Holdings({
   player,
   size,
@@ -432,35 +435,31 @@ function Holdings({
   const discarding = Boolean(controls);
   return (
     <div className={`gt-holdings ${size}`}>
-      {size === 'md' && (
-        <div className="gt-holding gt-holding-labels" aria-hidden="true">
-          <span>Cards</span>
-          <span>Gems</span>
-        </div>
-      )}
       {GEMS.map((g) => {
         const c = g as Color;
         const picked = controls?.returnSelection[g] ?? 0;
+        const owned = g === 'gold' ? 0 : player.bonuses[c];
+        const idle = !owned && !player.tokens[g];
         return (
-          <div className={`gt-holding ${g === 'gold' ? 'gold' : ''}`} key={g}>
-            {g === 'gold' ? (
-              <span className="gt-bonus placeholder" />
-            ) : (
+          <div className={`gt-holding ${g === 'gold' ? 'gold' : ''} ${idle ? 'idle' : ''}`} key={g}>
+            {g !== 'gold' && (
               <span
                 key={delta?.bonuses[seat]?.[c] ? `b-${delta.id}` : 'b'}
-                className={`gt-bonus gem-${c} ${player.bonuses[c] ? '' : 'none'} ${delta?.bonuses[seat]?.[c] ? 'flash' : ''}`}
+                className={`gt-bonus gem-${c} ${owned ? '' : 'none'} ${delta?.bonuses[seat]?.[c] ? 'flash' : ''}`}
                 data-fly={`bonus-${seat}-${c}`}
-                title={`${player.bonuses[c]} ${GEM_NAMES[c]} cards (permanent discount)`}
+                title={`${owned} ${GEM_NAMES[c]} cards (permanent discount)`}
               >
                 <DeltaBadge n={delta?.bonuses[seat]?.[c]} id={delta?.id} />
-                {player.bonuses[c]}
+                <GemIcon gem={c} size={size === 'md' ? 11 : 8} />
+                <b>{owned}</b>
               </span>
             )}
-            <span className="gt-delta-host" data-fly={`tok-${seat}-${g}`}>
+            <span className="gt-delta-host gt-holding-chip" data-fly={`tok-${seat}-${g}`}>
               <DeltaBadge n={delta?.tokens[seat]?.[g]} id={delta?.id} />
               <Token
                 gem={g}
                 size={size === 'md' ? 'md' : 'sm'}
+                countInside
                 count={player.tokens[g] - picked}
                 selected={picked}
                 empty={!player.tokens[g]}

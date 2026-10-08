@@ -2,6 +2,7 @@
 import type React from 'react';
 import { Crown } from 'lucide-react';
 import type { Card, Color, Gem, Noble } from '@/src/types';
+import { CardArt, DeckEmblem, NobleArt } from './art';
 export const COLORS: Color[] = ['white', 'blue', 'green', 'red', 'black'];
 export const GEMS: Gem[] = [...COLORS, 'gold'];
 export const GEM_NAMES: Record<Gem, string> = {
@@ -202,6 +203,7 @@ export function DevelopmentCard({
     .join(' ');
   const body = (
     <>
+      <CardArt tier={card.tier} id={card.id} />
       <span className="gt-card-head">
         <strong>{card.points || ''}</strong>
         <span className={`gt-card-gem gem-${card.bonus}`}>
@@ -254,9 +256,15 @@ export function CardBack({
 }) {
   const content = (
     <>
-      <span className="gt-back-dots">{'●'.repeat(tier)}</span>
-      {count !== undefined && <strong>{count}</strong>}
-      {!small && <small>{count === 0 ? 'EMPTY' : `TIER ${tier}`}</small>}
+      <span className="gt-back-dots" aria-hidden="true">
+        {Array.from({ length: tier }, (_, i) => (
+          <i key={i} />
+        ))}
+      </span>
+      {!small && <DeckEmblem />}
+      {count !== undefined && (
+        <strong className="gt-back-count">{count === 0 ? 'Empty' : count}</strong>
+      )}
     </>
   );
   const classes = `gt-back tier-${tier} ${selected ? 'selected' : ''} ${onClick ? 'clickable' : ''} ${small ? 'small' : ''}`;
@@ -297,6 +305,7 @@ export function NobleTile({
 }) {
   const content = (
     <>
+      <NobleArt id={noble.id} />
       <span className="gt-noble-points">
         3 <Crown size={12} />
       </span>
@@ -348,6 +357,7 @@ export function Token({
   empty,
   size = 'md',
   title,
+  countInside,
 }: {
   gem: Gem;
   count?: number;
@@ -360,13 +370,19 @@ export function Token({
   empty?: boolean;
   size?: 'xs' | 'sm' | 'md' | 'lg';
   title?: string;
+  /** Print the count on the chip itself instead of the gem glyph beside it. */
+  countInside?: boolean;
 }) {
   const content = (
     <>
       <span className={`gt-token-face gem-${gem}`}>
-        <GemIcon gem={gem} size={{ lg: 22, md: 16, sm: 11, xs: 9 }[size]} />
+        {countInside ? (
+          <strong className="gt-token-num">{count}</strong>
+        ) : (
+          <GemIcon gem={gem} size={{ lg: 22, md: 16, sm: 11, xs: 9 }[size]} />
+        )}
       </span>
-      {count !== undefined && <strong className="gt-token-count">{count}</strong>}
+      {count !== undefined && !countInside && <strong className="gt-token-count">{count}</strong>}
       {selected ? <span className="gt-token-picked">+{selected}</span> : null}
     </>
   );

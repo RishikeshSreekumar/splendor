@@ -672,22 +672,21 @@ kbd {
   opacity: 0.85;
 }
 
-/* Development cards */
+/* Development cards: a printed card. Header band with points and the bonus gem, a scene
+   tinted in the card's color, and the cost stacked down the bottom-left like the real game. */
 .gt-card {
   position: relative;
   width: var(--card-w);
   aspect-ratio: 5 / 7;
-  border-radius: max(7px, calc(var(--card-w) * 0.09));
-  border: 1px solid rgba(0, 0, 0, 0.35);
+  border-radius: max(7px, calc(var(--card-w) * 0.08));
+  border: 1px solid rgba(0, 0, 0, 0.42);
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
+  display: block;
   overflow: hidden;
+  isolation: isolate;
   text-align: left;
   color: #fff;
   box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.25) inset,
     0 2px 3px rgba(0, 0, 0, 0.25),
     0 6px 14px rgba(0, 0, 0, 0.22);
   transition:
@@ -699,68 +698,88 @@ kbd {
 }
 .gt-card.bonus-white {
   background:
-    radial-gradient(120% 70% at 30% 20%, #ffffff 0%, transparent 60%),
-    linear-gradient(160deg, #f4f0e8 0%, #d3cbbb 100%);
+    radial-gradient(110% 60% at 50% 30%, #fffdf8 0%, transparent 70%),
+    linear-gradient(180deg, #ece6da 0%, #c9bfac 100%);
   color: #2f2a25;
 }
 .gt-card.bonus-blue {
   background:
-    radial-gradient(120% 70% at 30% 20%, #6b9de0 0%, transparent 60%),
-    linear-gradient(160deg, #3f78c9 0%, #193a70 100%);
+    radial-gradient(110% 60% at 50% 30%, #6d9fe0 0%, transparent 70%),
+    linear-gradient(180deg, #3b72c2 0%, #173569 100%);
 }
 .gt-card.bonus-green {
   background:
-    radial-gradient(120% 70% at 30% 20%, #6cc497 0%, transparent 60%),
-    linear-gradient(160deg, #3d9f6c 0%, #164f31 100%);
+    radial-gradient(110% 60% at 50% 30%, #6fc699 0%, transparent 70%),
+    linear-gradient(180deg, #379866 0%, #134429 100%);
 }
 .gt-card.bonus-red {
   background:
-    radial-gradient(120% 70% at 30% 20%, #ec7c7c 0%, transparent 60%),
-    linear-gradient(160deg, #d24f4f 0%, #721a1a 100%);
+    radial-gradient(110% 60% at 50% 30%, #ec8080 0%, transparent 70%),
+    linear-gradient(180deg, #cc4848 0%, #661616 100%);
 }
 .gt-card.bonus-black {
   background:
-    radial-gradient(120% 70% at 30% 20%, #6e6667 0%, transparent 60%),
-    linear-gradient(160deg, #4a4344 0%, #151213 100%);
+    radial-gradient(110% 60% at 50% 30%, #747071 0%, transparent 70%),
+    linear-gradient(180deg, #48413f 0%, #121010 100%);
 }
-/* A soft diagonal sheen, like light across a printed card. */
+.gt-card-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+}
+/* On the pale diamond cards the scene's light strokes need a darker hand. */
+.gt-card.bonus-white .gt-card-art {
+  filter: invert(1);
+  opacity: 0.55;
+}
+/* A thin printed frame and a soft sheen over the scene. */
 .gt-card::after {
   content: '';
   position: absolute;
   inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 max(2px, calc(var(--card-w) * 0.025)) rgba(255, 255, 255, 0.16);
   background: linear-gradient(
     115deg,
-    transparent 35%,
-    rgba(255, 255, 255, 0.12) 48%,
+    transparent 38%,
+    rgba(255, 255, 255, 0.1) 50%,
     transparent 62%
   );
   pointer-events: none;
 }
 .gt-card-head {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 2;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 6% 8%;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.78));
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-  color: #231f22;
-  min-height: 27%;
-  position: relative;
-  z-index: 1;
+  height: 26%;
+  padding: 0 8% 0 9%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.82));
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.12);
+  color: #241f22;
 }
 .gt-card-head strong {
   font-family: var(--font-serif);
   font-weight: 700;
-  font-size: calc(var(--card-w) * 0.3);
+  font-size: calc(var(--card-w) * 0.31);
+  font-variant-numeric: lining-nums;
+  letter-spacing: -0.02em;
   line-height: 1;
   text-shadow: 0 1px 0 #fff;
 }
 .gt-card-gem {
   display: grid;
   place-items: center;
-  width: 32%;
+  width: 30%;
   aspect-ratio: 1;
-  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.25));
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.3));
 }
 .gt-card-gem.gem-white {
   color: #fff;
@@ -782,37 +801,45 @@ kbd {
   width: 100%;
   height: 100%;
 }
-/* Costs sit in a 2×2 grid in the bottom-left corner, so four colors always fit. */
 .gt-card-cost {
-  display: grid;
-  grid-template-columns: repeat(2, max-content);
-  align-content: end;
-  gap: 3px;
-  padding: 7%;
-  position: relative;
-  z-index: 1;
+  position: absolute;
+  z-index: 2;
+  left: 7%;
+  bottom: 6%;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--card-w) * 0.03);
 }
+/* Cost coins: the gem's own color, a bright inner ring, and a bold white figure. */
 .gt-pip {
   display: inline-grid;
   place-items: center;
-  width: calc(var(--card-w) * 0.25);
-  height: calc(var(--card-w) * 0.25);
-  min-width: 14px;
-  min-height: 14px;
+  width: calc(var(--card-w) * 0.22);
+  height: calc(var(--card-w) * 0.22);
+  min-width: 13px;
+  min-height: 13px;
   border-radius: 50%;
   border: 1.5px solid;
+  color: #fff;
+  font-family: var(--font-ui);
   font-weight: 800;
-  font-size: max(9px, calc(var(--card-w) * 0.145));
-  line-height: 1;
+  font-size: max(9px, calc(var(--card-w) * 0.13));
   font-variant-numeric: tabular-nums;
+  line-height: 1;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.45);
   box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.45),
-    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+    0 1px 2px rgba(0, 0, 0, 0.5),
+    inset 0 0 0 1.5px rgba(255, 255, 255, 0.3);
+}
+.gt-pip.gem-white,
+.gt-pip.gem-gold {
+  color: #2f2a25;
+  text-shadow: none;
 }
 .gt-pip.card {
   border-radius: 4px;
-  width: calc(var(--noble-w, 80px) * 0.22);
-  height: calc(var(--noble-w, 80px) * 0.29);
+  width: calc(var(--noble-w, 80px) * 0.21);
+  height: calc(var(--noble-w, 80px) * 0.28);
   min-width: 14px;
   min-height: 18px;
   font-size: max(10px, calc(var(--noble-w, 80px) * 0.15));
@@ -839,7 +866,7 @@ kbd {
 .gt-card.affordable::before {
   content: 'BUY';
   position: absolute;
-  z-index: 2;
+  z-index: 3;
   right: 6%;
   bottom: 6%;
   padding: 2px 6px;
@@ -875,6 +902,7 @@ kbd {
 }
 .gt-card.empty {
   background: rgba(0, 0, 0, 0.14);
+  border-radius: max(7px, calc(var(--card-w) * 0.08));
   border: 2px dashed rgba(255, 255, 255, 0.14);
   box-shadow: none;
 }
@@ -914,24 +942,22 @@ kbd {
   }
 }
 
-/* Deck backs */
+/* Deck backs: tier dots, a gem emblem, and how many cards are left. */
 .gt-back {
   position: relative;
   width: var(--card-w);
   aspect-ratio: 5 / 7;
-  border-radius: max(7px, calc(var(--card-w) * 0.09));
-  border: 1px solid rgba(0, 0, 0, 0.4);
+  border-radius: max(7px, calc(var(--card-w) * 0.08));
+  border: 1px solid rgba(0, 0, 0, 0.42);
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: var(--s-1);
+  justify-content: space-between;
+  padding: 11% 0 9%;
   color: #fff;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
   box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.25) inset,
-    2px 2px 0 rgba(0, 0, 0, 0.22),
-    4px 4px 0 rgba(0, 0, 0, 0.12),
+    2px 2px 0 rgba(0, 0, 0, 0.2),
+    4px 4px 0 rgba(0, 0, 0, 0.1),
     0 8px 16px rgba(0, 0, 0, 0.2);
   font: inherit;
   transition:
@@ -939,45 +965,59 @@ kbd {
     box-shadow 0.28s var(--ease-out),
     filter 0.28s var(--ease-out);
 }
-/* Inner frame shared by all three tiers. */
 .gt-back::before {
   content: '';
   position: absolute;
-  inset: 6%;
-  border-radius: calc(var(--card-w) * 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  inset: 5%;
+  border-radius: calc(var(--card-w) * 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.28);
   pointer-events: none;
 }
 .gt-back.tier-1 {
   background:
-    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.06) 0 2px, transparent 2px 9px),
-    radial-gradient(circle at 50% 40%, #74c278, #2b6230);
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 7px),
+    repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 7px),
+    radial-gradient(circle at 50% 42%, #6fbb73, #275a2c);
 }
 .gt-back.tier-2 {
   background:
-    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.07) 0 2px, transparent 2px 9px),
-    radial-gradient(circle at 50% 40%, #f3c95a, #9a690c);
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.06) 0 1px, transparent 1px 7px),
+    repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.06) 0 1px, transparent 1px 7px),
+    radial-gradient(circle at 50% 42%, #eec356, #8f600b);
 }
 .gt-back.tier-3 {
   background:
-    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.06) 0 2px, transparent 2px 9px),
-    radial-gradient(circle at 50% 40%, #7095e4, #243a80);
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 7px),
+    repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 7px),
+    radial-gradient(circle at 50% 42%, #6d92e2, #213678);
 }
 .gt-back-dots {
-  font-size: 9px;
-  letter-spacing: 3px;
+  display: flex;
+  gap: max(3px, calc(var(--card-w) * 0.035));
 }
-.gt-back strong {
-  font-family: var(--font-serif);
-  font-weight: 600;
-  font-size: calc(var(--card-w) * 0.28);
-  line-height: 1;
+.gt-back-dots i {
+  width: max(4px, calc(var(--card-w) * 0.055));
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
 }
-.gt-back small {
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  opacity: 0.85;
+.gt-back-emblem {
+  width: 56%;
+  height: auto;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.25));
+}
+.gt-back-count {
+  min-width: 34%;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.28);
+  font-family: var(--font-ui);
+  font-weight: 800;
+  font-size: max(10px, calc(var(--card-w) * 0.12));
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  line-height: 1.3;
 }
 .gt-back.clickable {
   cursor: pointer;
@@ -995,12 +1035,17 @@ kbd {
 }
 .gt-back.small {
   width: 34px;
+  justify-content: center;
+  padding: 0;
   border-radius: 5px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
 }
 .gt-back.small::before {
   inset: 3px;
   border-radius: 3px;
+}
+.gt-back.small .gt-back-dots i {
+  width: 4px;
 }
 
 /* Nobles: points in the corner, the bonuses they ask for along the bottom. */
@@ -1027,6 +1072,19 @@ kbd {
   transition:
     transform 0.28s var(--ease-out),
     box-shadow 0.28s var(--ease-out);
+}
+.gt-noble {
+  overflow: hidden;
+  isolation: isolate;
+}
+.gt-noble-art {
+  position: absolute;
+  z-index: -1;
+  right: -6%;
+  bottom: -4%;
+  width: 70%;
+  height: 70%;
+  color: rgba(95, 62, 20, 0.2);
 }
 .gt-noble-points {
   font-family: var(--font-serif);
@@ -1131,6 +1189,24 @@ kbd {
   min-width: 12px;
   font-variant-numeric: tabular-nums;
 }
+/* A count printed on the chip itself (player holdings). */
+.gt-token-num {
+  font-family: var(--font-ui);
+  font-weight: 800;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: #fff;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.45);
+}
+.gt-token-face.gem-white .gt-token-num,
+.gt-token-face.gem-gold .gt-token-num {
+  color: #2f2a25;
+  text-shadow: none;
+}
+.gt-token.sm .gt-token-num {
+  font-size: 9.5px;
+}
 .gt-bank .gt-token-count {
   position: absolute;
   right: -7px;
@@ -1201,97 +1277,108 @@ kbd {
   animation: gt-chip-in 0.3s var(--ease-spring);
 }
 
-/* Holdings: one column per color — owned cards above, tokens below. Opponents get a compact
-   single row: the card count tile, then the gem chip and how many are held. */
-.gt-holdings.sm {
-  grid-auto-columns: auto;
-  justify-content: space-between;
-}
-.gt-holdings.sm .gt-holding,
-.gt-holdings.sm .gt-holding .gt-token {
-  flex-direction: row;
-  gap: 2px;
-}
-.gt-holdings.sm .gt-bonus {
-  width: 19px;
-  height: 25px;
-  font-size: 12px;
-}
-.gt-holdings.sm .gt-bonus.placeholder {
-  display: none;
-}
-.gt-holdings.sm .gt-token.sm .gt-token-face {
-  width: 17px;
-  height: 17px;
-}
-.gt-holdings.sm .gt-token-count {
-  min-width: 9px;
-}
+/* Holdings: one unit per color. The tile counts cards owned (a permanent discount); the
+   chip tucked into its corner counts gems held. Gold is a chip on its own. */
 .gt-holdings {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(0, 1fr);
-  gap: var(--s-1);
-}
-.gt-holding {
   display: flex;
-  flex-direction: column;
-  align-items: center;
+  align-items: flex-end;
+  gap: 9px;
+}
+.gt-holdings.sm {
   gap: 6px;
 }
-.gt-holding .gt-token {
-  flex-direction: column;
-  gap: 2px;
+.gt-holding {
+  position: relative;
+  padding: 0 8px 7px 0;
 }
-.gt-holdings.md .gt-holding-labels {
-  align-items: flex-start;
-  justify-content: space-between;
-  padding: 14px 0 26px;
-  margin-right: var(--s-2);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: #a39889;
+.gt-holdings.sm .gt-holding {
+  padding: 0 6px 5px 0;
+}
+.gt-holding.gold {
+  padding: 0;
+  align-self: center;
 }
 .gt-bonus {
   position: relative;
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 31px;
-  border-radius: 4px;
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 3px;
+  padding: 4px 0 0 5px;
+  width: 34px;
+  height: 44px;
+  border-radius: 6px;
   border: 1.5px solid;
-  font-weight: 800;
-  font-size: 13px;
   font-variant-numeric: tabular-nums;
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.25),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    inset 0 0 0 1.5px rgba(255, 255, 255, 0.22);
   transition: opacity 0.3s var(--ease-out);
 }
+.gt-bonus b {
+  font-family: var(--font-ui);
+  font-weight: 800;
+  font-size: 17px;
+  line-height: 1;
+  color: #fff;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.4);
+}
+.gt-bonus.gem-white b {
+  color: #2f2a25;
+  text-shadow: none;
+}
+.gt-bonus .gem-icon {
+  opacity: 0.85;
+}
 .gt-bonus.none {
-  opacity: 0.25;
+  opacity: 0.3;
   box-shadow: none;
 }
-.gt-bonus.placeholder {
-  visibility: hidden;
+.gt-holdings.sm .gt-bonus {
+  width: 22px;
+  height: 30px;
+  border-radius: 4px;
+  gap: 2px;
+  padding: 3px 0 0 3px;
 }
-.gt-holdings.sm .gt-token-count {
-  font-size: var(--t-sm);
+.gt-holdings.sm .gt-bonus b {
+  font-size: 12px;
 }
-.gt-holdings.md .gt-bonus {
-  width: 36px;
-  height: 46px;
-  font-size: 17px;
-  border-radius: var(--r-sm);
+.gt-holding > .gt-holding-chip {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
 }
-.gt-holdings.md .gt-token.md .gt-token-face {
-  width: 36px;
-  height: 36px;
+.gt-holding.gold > .gt-holding-chip {
+  position: relative;
 }
-.gt-holdings.md .gt-token-count {
-  font-size: var(--t-md);
+/* Ring the chip in the panel color so it reads as sitting on top of the tile. */
+.gt-holding:not(.gold) .gt-token-face {
+  box-shadow:
+    0 0 0 2px var(--surface),
+    0 2px 3px rgba(0, 0, 0, 0.3);
+}
+.gt-holdings.md .gt-holding:not(.gold) .gt-token.md .gt-token-face {
+  width: 24px;
+  height: 24px;
+  border-width: 1.5px;
+}
+.gt-holdings.md .gt-holding.gold .gt-token.md .gt-token-face {
+  width: 32px;
+  height: 32px;
+}
+.gt-holdings.sm .gt-holding:not(.gold) .gt-token.sm .gt-token-face {
+  width: 17px;
+  height: 17px;
+}
+.gt-holdings.sm .gt-holding.gold .gt-token.sm .gt-token-face {
+  width: 22px;
+  height: 22px;
+}
+.gt-holding .gt-token.empty .gt-token-face {
+  opacity: 0.4;
 }
 .gt-stats {
   display: flex;
@@ -1595,10 +1682,11 @@ kbd {
   gap: 6px;
 }
 .gt-player:not(.mine) .gt-reserved-cards .gt-card-head {
-  padding: 4px 5px;
+  padding: 0 5px;
 }
 .gt-player:not(.mine) .gt-reserved-cards .gt-card-cost {
-  padding: 3px;
+  left: 3px;
+  bottom: 3px;
   gap: 1px;
 }
 .gt-player:not(.mine) .gt-reserved-cards .gt-pip {
@@ -1614,10 +1702,6 @@ kbd {
 .gt-player.mine .gt-reserved-cards {
   --card-w: min(84px, calc((var(--side-w) - 60px) / 3));
   gap: 10px;
-}
-.gt-player.mine .gt-reserved-cards .gt-card-cost {
-  gap: 2px;
-  padding: 6%;
 }
 .gt-player.mine .gt-reserved-cards .gt-back {
   width: var(--card-w);
@@ -2391,13 +2475,14 @@ kbd {
   }
   .gt-card-cost {
     gap: 2px;
-    padding: 4px;
+    left: 5%;
+    bottom: 4%;
   }
   .gt-pip {
     border-width: 1px;
   }
   .gt-card-head {
-    padding: 3px 5px;
+    padding: 0 6%;
   }
   .gt-card.affordable::before {
     display: none;
@@ -2413,9 +2498,6 @@ kbd {
   .gt-status-tools .gt-btn {
     height: 28px;
     padding: 0 var(--s-2);
-  }
-  .gt-holdings.md .gt-holding-labels {
-    display: none;
   }
 }
 @media (max-width: 600px) {
@@ -2452,14 +2534,14 @@ kbd {
   .gt-round {
     margin-right: 0;
   }
-  .gt-holdings.md .gt-bonus {
-    width: 30px;
-    height: 40px;
-    font-size: 15px;
+  .gt-card-cost {
+    gap: 1px;
+    bottom: 3%;
   }
-  .gt-holdings.md .gt-token.md .gt-token-face {
-    width: 30px;
-    height: 30px;
+  .gt-pip {
+    min-width: 11px;
+    min-height: 11px;
+    font-size: 8.5px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
