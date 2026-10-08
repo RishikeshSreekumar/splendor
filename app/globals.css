@@ -3,6 +3,7 @@
    warm parchment surfaces, aubergine for structure, gold for emphasis and action, and the
    gem colors for meaning (emerald = good, ruby = problem, sapphire = in progress). */
 :root {
+  color-scheme: light;
   /* Surfaces and text */
   --bg: #f5f1e8;
   --surface: #fffdf8;
@@ -20,6 +21,10 @@
   --gold: #c8962a;
   --gold-ink: #8c6210;
   --gold-soft: #f7ecce;
+  --gold-line: #dcc187;
+  --warm: #fdf7e8;
+  --surface-2: #faf6ee;
+  --hover: #fbf8f1;
   /* Meaning */
   --emerald: #2c8459;
   --emerald-soft: #e2f1e7;
@@ -163,7 +168,7 @@ textarea {
 }
 input:hover,
 select:hover {
-  border-color: #c4b79f;
+  border-color: color-mix(in srgb, var(--line-strong), var(--ink) 18%);
 }
 input:focus,
 select:focus,
@@ -208,23 +213,28 @@ progress {
   }
 }
 
-/* Shell: aubergine sidebar, slim breadcrumb bar, content column. */
+/* Shell: a sticky aubergine sidebar with the four main pages and a profile menu at its foot,
+   a slim breadcrumb bar, and the content column. */
 .app-shell {
   display: flex;
   min-height: 100vh;
 }
 .sidebar {
+  position: sticky;
+  top: 0;
+  flex: none;
   width: 248px;
-  min-width: 248px;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding: 26px 16px 14px;
   background:
     radial-gradient(120% 40% at 0% 0%, rgba(200, 150, 42, 0.12), transparent 60%), var(--brand);
   color: var(--brand-ink);
-  padding: 30px 18px 22px;
-  position: fixed;
-  inset: 0 auto 0 0;
-  display: flex;
-  flex-direction: column;
   z-index: 30;
+  transition:
+    width 0.4s var(--ease-out),
+    padding 0.4s var(--ease-out);
 }
 .brand {
   display: flex;
@@ -233,7 +243,7 @@ progress {
   font-size: 16px;
   letter-spacing: 0.16em;
   font-weight: 700;
-  margin: 0 10px 44px;
+  margin: 0 10px 34px;
 }
 .brand-icon {
   display: grid;
@@ -248,7 +258,6 @@ progress {
   font-weight: 600;
   color: var(--brand-muted);
 }
-.sidebar-label,
 .tiny-label {
   font-size: 10.5px;
   font-weight: 700;
@@ -256,14 +265,12 @@ progress {
   line-height: 1.6;
   text-transform: uppercase;
 }
-.sidebar-label {
-  color: var(--brand-muted);
-  margin: 0 12px 12px;
-}
 .sidebar nav {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-height: 0;
+  overflow-y: auto;
 }
 .nav-link {
   position: relative;
@@ -296,46 +303,189 @@ progress {
 .nav-link.active::before {
   content: '';
   position: absolute;
-  left: -18px;
+  left: -16px;
   top: 9px;
   bottom: 9px;
   width: 3px;
   border-radius: 0 3px 3px 0;
   background: var(--gold);
 }
-.sidebar-note {
-  margin: auto 12px 26px;
-  padding-top: 40px;
+/* Profile: who you are, plus account, appearance, system design and the rules. */
+.profile {
+  position: relative;
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
-.sidebar-note .tiny-label {
-  color: var(--gold);
+.profile-button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--brand-ink);
+  text-align: left;
+  transition: background 0.2s var(--ease-out);
 }
-.sidebar-note p {
-  font-family: var(--font-serif);
-  font-size: 22px;
+.profile-button:hover,
+.profile.open .profile-button {
+  background: rgba(255, 255, 255, 0.08);
+}
+.profile-avatar {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #e7bd4c, #b07d1c);
+  color: #2a2131;
+  font-weight: 800;
+  font-size: 14px;
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.15);
+}
+.profile-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
   line-height: 1.3;
-  margin: 10px 0 10px;
-  color: #ece2d6;
 }
-.sidebar-note > span:last-child {
+.profile-text strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.profile-text span {
   font-size: 12px;
   color: var(--brand-muted);
 }
-.sidebar-bottom {
-  font-size: 13px;
-  color: #cfc3d1;
+.profile-chevron {
+  flex: none;
+  color: var(--brand-muted);
+}
+.profile-menu {
+  position: absolute;
+  z-index: 50;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 8px);
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-lg);
+  transform-origin: bottom left;
+  animation: menu-in 0.18s var(--ease-out);
+}
+@keyframes menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
+}
+.profile-menu-head {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 4px;
+  padding: 8px 10px 10px;
+  border-bottom: 1px solid var(--line);
+  line-height: 1.35;
+}
+.profile-menu-head strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+.profile-menu-head span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.profile-item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 18px 12px 0;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 7px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink-2);
+  transition:
+    background 0.15s,
+    color 0.15s;
 }
-.sidebar-bottom:hover {
-  color: #fff;
+.profile-item svg {
+  flex: none;
+  color: var(--muted);
+}
+.profile-item svg:last-child:not(:first-child) {
+  margin-left: auto;
+}
+.profile-item:hover {
+  background: var(--soft);
+  color: var(--ink);
+}
+.profile-item.active {
+  color: var(--ink);
+  font-weight: 600;
+}
+.profile-item.active svg {
+  color: var(--gold);
+}
+.profile-theme {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 10px 10px 6px;
+  border-top: 1px solid var(--line);
+}
+.profile-theme > span {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.theme-switch {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 9px;
+  background: var(--soft);
+}
+.theme-switch button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex: 1;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+.theme-switch button.current {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
 }
 .main-shell {
-  margin-left: 248px;
-  width: calc(100% - 248px);
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
 }
@@ -348,7 +498,7 @@ progress {
   justify-content: space-between;
   color: var(--muted);
   font-size: 13px;
-  background: rgba(245, 241, 232, 0.85);
+  background: color-mix(in srgb, var(--bg) 85%, transparent);
   backdrop-filter: blur(8px);
   position: sticky;
   top: 0;
@@ -589,7 +739,7 @@ footer {
   gap: 10px;
   margin: 14px 0;
   padding: 12px 16px;
-  border: 1px solid #ead9a8;
+  border: 1px solid color-mix(in srgb, currentColor 22%, transparent);
   border-radius: var(--radius);
   background: var(--gold-soft);
   color: #5c4310;
@@ -600,13 +750,11 @@ footer {
 .error {
   color: var(--ruby);
   background: var(--ruby-soft);
-  border-color: #ecc4be;
 }
 .notice.success,
 .success {
   color: var(--emerald);
   background: var(--emerald-soft);
-  border-color: #c3dfcc;
 }
 .empty-state {
   border: 1.5px dashed var(--line-strong);
@@ -808,8 +956,8 @@ footer {
   box-shadow: var(--shadow-sm);
 }
 .bot-option.selected {
-  border-color: #dcc187;
-  background: #fdf7e8;
+  border-color: var(--gold-line);
+  background: var(--warm);
 }
 .bot-avatar {
   display: grid;
@@ -819,19 +967,19 @@ footer {
   border-radius: 10px;
 }
 .tone-0 {
-  background: #f6e6d8;
+  background: color-mix(in srgb, currentColor 15%, transparent);
   color: #b0622f;
 }
 .tone-1 {
-  background: #dfefe8;
+  background: color-mix(in srgb, currentColor 15%, transparent);
   color: #2f7a63;
 }
 .tone-2 {
-  background: #e2e7f6;
+  background: color-mix(in srgb, currentColor 15%, transparent);
   color: #4a5fae;
 }
 .tone-3 {
-  background: #f1e1ec;
+  background: color-mix(in srgb, currentColor 15%, transparent);
   color: #94457f;
 }
 .bot-info {
@@ -892,7 +1040,7 @@ table {
 th {
   padding: 14px 20px;
   border-bottom: 1px solid var(--line);
-  background: #faf6ee;
+  background: var(--surface-2);
   text-align: left;
   font-size: 11px;
   font-weight: 700;
@@ -910,7 +1058,7 @@ tbody tr {
   transition: background 0.15s;
 }
 tbody tr:hover {
-  background: #fbf8f1;
+  background: var(--hover);
 }
 tr:last-child td {
   border-bottom: 0;
@@ -1145,7 +1293,7 @@ td strong {
 
 /* System design */
 .design-intro {
-  background: linear-gradient(135deg, #fbf3df, var(--surface));
+  background: linear-gradient(135deg, var(--warm), var(--surface));
 }
 .design-intro p {
   max-width: 760px;
@@ -1246,17 +1394,12 @@ td strong {
 }
 @media (max-width: 1100px) {
   .sidebar {
-    width: 212px;
-    min-width: 212px;
-    padding-left: 14px;
-    padding-right: 14px;
+    width: 216px;
+    padding-left: 12px;
+    padding-right: 12px;
   }
   .nav-link.active::before {
-    left: -14px;
-  }
-  .main-shell {
-    margin-left: 212px;
-    width: calc(100% - 212px);
+    left: -12px;
   }
   .panel {
     padding: 22px;
@@ -1299,39 +1442,6 @@ td strong {
   }
 }
 @media (max-width: 600px) {
-  .app-shell {
-    display: block;
-  }
-  .sidebar {
-    position: static;
-    width: 100%;
-    min-width: 0;
-    padding: 16px;
-    display: block;
-  }
-  .brand {
-    margin: 0 0 14px;
-    font-size: 15px;
-  }
-  .sidebar-label,
-  .sidebar-note,
-  .sidebar-bottom,
-  .nav-link.active::before {
-    display: none;
-  }
-  .sidebar nav {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 4px;
-  }
-  .nav-link {
-    padding: 10px 12px;
-    font-size: 13px;
-  }
-  .main-shell {
-    margin-left: 0;
-    width: 100%;
-  }
   .topbar {
     display: none;
   }
@@ -1424,22 +1534,13 @@ main > * {
 
 /* While a game is on screen the table gets the whole window: the sidebar folds into an
    icon rail and the top bar steps aside. Navigation stays one click away. */
-.sidebar,
-.main-shell {
-  transition:
-    width 0.4s var(--ease-out),
-    min-width 0.4s var(--ease-out),
-    margin-left 0.4s var(--ease-out),
-    padding 0.4s var(--ease-out);
-}
 .app-shell:has(.gt-page) .sidebar {
   width: 72px;
-  min-width: 72px;
-  padding: 22px 12px 20px;
+  padding: 20px 12px 12px;
   align-items: center;
 }
 .app-shell:has(.gt-page) .brand {
-  margin: 0 0 30px;
+  margin: 0 0 26px;
 }
 .app-shell:has(.gt-page) .brand-text,
 .app-shell:has(.gt-page) .nav-text {
@@ -1450,11 +1551,8 @@ main > * {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
 }
-.app-shell:has(.gt-page) .sidebar-label,
-.app-shell:has(.gt-page) .sidebar-note {
-  display: none;
-}
-.app-shell:has(.gt-page) .sidebar nav {
+.app-shell:has(.gt-page) .sidebar nav,
+.app-shell:has(.gt-page) .profile {
   width: 100%;
 }
 .app-shell:has(.gt-page) .nav-link {
@@ -1464,15 +1562,15 @@ main > * {
 .app-shell:has(.gt-page) .nav-link.active::before {
   left: -12px;
 }
-.app-shell:has(.gt-page) .sidebar-bottom {
-  margin-top: auto;
-  padding: 16px 0 0;
+.app-shell:has(.gt-page) .profile-button {
   justify-content: center;
-  width: 100%;
+  padding: 6px 0;
 }
-.app-shell:has(.gt-page) .main-shell {
-  margin-left: 72px;
-  width: calc(100% - 72px);
+.app-shell:has(.gt-page) .profile-menu {
+  left: calc(100% + 12px);
+  right: auto;
+  bottom: 0;
+  width: 250px;
 }
 .app-shell:has(.gt-page) .topbar {
   display: none;
@@ -1480,38 +1578,133 @@ main > * {
 .app-shell:has(.gt-page) main {
   max-width: none;
   padding: 16px 20px 28px;
-  min-height: calc(100vh - 62px);
 }
+/* Phones: the sidebar becomes a sticky bar across the top — brand, icons, profile. */
 @media (max-width: 600px) {
+  .app-shell {
+    display: block;
+  }
+  .sidebar,
   .app-shell:has(.gt-page) .sidebar {
+    position: sticky;
+    top: 0;
     width: 100%;
-    min-width: 0;
-    display: flex;
+    height: auto;
     flex-direction: row;
     align-items: center;
-    gap: 10px;
-    padding: 10px 12px;
+    gap: 6px;
+    padding: 8px 10px;
+    z-index: 40;
   }
+  .brand,
   .app-shell:has(.gt-page) .brand {
-    margin: 0;
+    margin: 0 4px 0 2px;
   }
+  .brand-text,
+  .nav-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+  .sidebar nav,
   .app-shell:has(.gt-page) .sidebar nav {
-    display: flex;
     flex-direction: row;
+    flex: 1;
+    width: auto;
     gap: 2px;
     overflow-x: auto;
   }
+  .nav-link,
   .app-shell:has(.gt-page) .nav-link {
-    padding: 9px 11px;
+    padding: 10px;
   }
-  .app-shell:has(.gt-page) .sidebar-bottom {
+  .nav-link.active::before {
     display: none;
   }
-  .app-shell:has(.gt-page) .main-shell {
-    margin-left: 0;
-    width: 100%;
+  .profile,
+  .app-shell:has(.gt-page) .profile {
+    width: auto;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+  .profile-button,
+  .app-shell:has(.gt-page) .profile-button {
+    padding: 3px;
+  }
+  .profile-menu,
+  .app-shell:has(.gt-page) .profile-menu {
+    top: calc(100% + 10px);
+    bottom: auto;
+    left: auto;
+    right: 0;
+    width: 260px;
+    transform-origin: top right;
   }
   .app-shell:has(.gt-page) main {
     padding: 10px 10px 24px;
   }
+}
+
+/* Dark theme: the same system at night. Light stays the default. */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #17131b;
+  --surface: #211b26;
+  --soft: #2b2431;
+  --line: #372e3e;
+  --line-strong: #4b4054;
+  --ink: #f2ebe3;
+  --ink-2: #d3c8d3;
+  --muted: #a096a5;
+  --brand: #100c13;
+  --brand-2: #2c2333;
+  --brand-muted: #a497a8;
+  --gold: #dcae45;
+  --gold-ink: #e8c066;
+  --gold-soft: #392d15;
+  --gold-line: #6d5626;
+  --warm: #2a2218;
+  --surface-2: #1c1720;
+  --hover: #272029;
+  --emerald: #66c795;
+  --emerald-soft: #183424;
+  --ruby: #f08b83;
+  --ruby-soft: #3d1d1c;
+  --sapphire: #8fb2f2;
+  --sapphire-soft: #1b2741;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35), 0 6px 18px rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.35), 0 14px 32px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.55);
+  --focus: 0 0 0 3px rgba(220, 174, 69, 0.4);
+}
+:root[data-theme='dark'] .sidebar {
+  border-right: 1px solid var(--line);
+}
+:root[data-theme='dark'] .code-editor {
+  background: #120e15;
+}
+:root[data-theme='dark'] .editor-top {
+  background: #1d1722;
+}
+:root[data-theme='dark'] .primary {
+  background: var(--gold);
+  border-color: var(--gold);
+  color: #21190a;
+  box-shadow: 0 4px 14px rgba(220, 174, 69, 0.2);
+}
+:root[data-theme='dark'] .primary:hover:not(:disabled) {
+  background: #e7bd58;
+}
+:root[data-theme='dark'] .primary svg {
+  color: inherit;
+}
+/* Mermaid draws light diagrams; give them a light card so they stay legible. */
+:root[data-theme='dark'] .diagram-frame > div {
+  padding: 16px;
+  border-radius: var(--radius-sm);
+  background: #f7f2e9;
 }

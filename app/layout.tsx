@@ -12,9 +12,18 @@ export const metadata: Metadata = {
   description:
     'A strategy laboratory for vanilla Splendor. Build a bot, study its decisions, and evaluate it with an independent chess clock.',
 };
+/** Applies a saved dark theme before first paint, so the page never flashes light. */
+const themeScript = `try{if(localStorage.getItem('splendor-theme')==='dark')document.documentElement.dataset.theme='dark'}catch(e){}`;
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${display.variable} ${sans.variable} ${mono.variable}`}>
+    <html
+      lang="en"
+      className={`${display.variable} ${sans.variable} ${mono.variable}`}
+      suppressHydrationWarning
+    >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
       <body>
         <Shell>{children}</Shell>
       </body>

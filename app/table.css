@@ -130,7 +130,7 @@
 }
 .gt-chip.win {
   align-self: flex-start;
-  background: #fbf0d0;
+  background: var(--gold-soft);
   color: #8a6408;
 }
 kbd {
@@ -907,12 +907,12 @@ kbd {
   display: none;
 }
 .gt-card.empty.slot {
-  border-color: #ddd4c6;
-  background: rgba(255, 255, 255, 0.4);
+  border-color: var(--line-strong);
+  background: color-mix(in srgb, var(--surface) 50%, transparent);
   display: grid;
   place-items: center;
   place-content: center;
-  color: #b3a89b;
+  color: var(--muted);
   font-size: 10.5px;
   font-weight: 600;
   letter-spacing: 0.06em;
@@ -1396,7 +1396,7 @@ kbd {
 }
 .gt-stats .over,
 .gt-stats .over b {
-  color: #b23b3b;
+  color: var(--ruby);
 }
 
 /* Shared seat header pieces */
@@ -1495,7 +1495,7 @@ kbd {
   position: relative;
   height: 5px;
   border-radius: 999px;
-  background: rgba(48, 44, 53, 0.08);
+  background: color-mix(in srgb, var(--ink) 9%, transparent);
   overflow: hidden;
 }
 .gt-race > span {
@@ -1608,9 +1608,9 @@ kbd {
   background: var(--seat-tone, var(--line));
 }
 .gt-player.on-turn {
-  border-color: #dfc78f;
+  border-color: var(--gold-line);
   box-shadow:
-    0 0 0 2px #f1e2b9,
+    0 0 0 2px var(--gold-soft),
     var(--panel-shadow);
 }
 .gt-player.winner {
@@ -1628,8 +1628,8 @@ kbd {
 /* Your own seat: the same panel, under the board, warmer and laid out wide: gems on the
    left, reserved cards on the right. */
 .gt-player.mine {
-  background: linear-gradient(180deg, #fff8ea, var(--surface) 90px);
-  border-color: #ebdcc0;
+  background: linear-gradient(180deg, var(--warm), var(--surface) 90px);
+  border-color: color-mix(in srgb, var(--gold-line) 60%, var(--line));
   padding: 14px 18px 16px;
 }
 .gt-player-body,
@@ -1666,7 +1666,7 @@ kbd {
   font-size: 32px;
 }
 .gt-player.mine.on-turn {
-  border-color: #e6cf8f;
+  border-color: var(--gold-line);
   box-shadow:
     0 0 0 3px var(--glow-soft),
     var(--panel-shadow);
@@ -1844,7 +1844,7 @@ kbd {
   border-left-color: var(--tone-3) !important;
 }
 .gt-assisted {
-  color: #b23b3b;
+  color: var(--ruby);
 }
 .gt-inline-bag {
   display: inline-flex;
@@ -1964,23 +1964,23 @@ kbd {
 }
 /* The move being played right now: bright, so every player sees it land. */
 .gt-move.live {
-  background: #fbf0cc;
-  border: 1px solid #e8cf86;
+  background: var(--gold-soft);
+  border: 1px solid var(--gold-line);
   font-weight: 600;
   animation: gt-move-in 0.35s var(--ease-out);
 }
 /* Afterwards it stays on the panel, quieter, until the seat moves again. */
 .gt-move.last {
-  background: #f6f2ea;
+  background: var(--soft);
   border: 1px solid transparent;
-  color: #5d5458;
+  color: var(--ink-2);
 }
 .gt-move-tag {
   font-size: 9.5px;
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: #a39889;
+  color: var(--muted);
   margin-right: 2px;
 }
 .gt-move-none {
@@ -2087,7 +2087,7 @@ kbd {
   animation-delay: 0.6s;
 }
 .gt-ranking li.won {
-  background: linear-gradient(90deg, #fbf0cf, #fdf7e6);
+  background: linear-gradient(90deg, var(--gold-soft), var(--warm));
 }
 .gt-ranking .gt-avatar {
   grid-row: span 2;
@@ -2194,30 +2194,25 @@ kbd {
   text-transform: uppercase;
   border-radius: 999px;
   padding: 3px 8px;
-  background: var(--soft);
+  background: color-mix(in srgb, currentColor 14%, transparent);
   color: var(--ink);
   white-space: nowrap;
   line-height: 1.2;
 }
 .gt-level.level-0 {
-  background: #e3f1e6;
-  color: #24683a;
+  color: var(--emerald);
 }
 .gt-level.level-1 {
-  background: #fbf0d0;
-  color: #8a6408;
+  color: var(--gold-ink);
 }
 .gt-level.level-2 {
-  background: #f7dcdc;
-  color: #8f2323;
+  color: var(--ruby);
 }
 .gt-level.level-custom {
-  background: #e7e5f2;
-  color: #4b4778;
+  color: color-mix(in srgb, var(--sapphire), var(--ruby) 45%);
 }
 .gt-level.level-human {
-  background: #dcebf5;
-  color: #1f5a80;
+  color: var(--sapphire);
 }
 .gt-name,
 .gt-join label {
@@ -2270,11 +2265,11 @@ kbd {
     box-shadow 0.15s;
 }
 .gt-select-button:hover {
-  border-color: #cdbfa9;
+  border-color: color-mix(in srgb, var(--line-strong), var(--ink) 18%);
 }
 .gt-select.open .gt-select-button {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(178, 101, 53, 0.15);
+  box-shadow: var(--focus);
 }
 .gt-select-name {
   flex: 1;
@@ -2358,7 +2353,7 @@ kbd {
   margin: 18px 0;
   padding: 14px 16px 14px 32px;
   border-radius: var(--r-md);
-  background: #f6f1e8;
+  background: var(--soft);
   color: var(--muted);
   font-size: 13px;
   line-height: 1.75;
@@ -2527,6 +2522,10 @@ kbd {
   }
   .gt-status-tools .gt-btn svg {
     display: none;
+  }
+  /* Stay clear of the sticky app bar across the top. */
+  .gt-status {
+    top: 62px;
   }
   /* The message gets the full width; the round and buttons wrap onto their own row. */
   .gt-status-text {
