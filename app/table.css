@@ -318,13 +318,13 @@ kbd {
   height: 42px;
   font-size: var(--t-md);
 }
-.gt-me .gt-btn:not(.primary),
+.gt-player .gt-btn:not(.primary),
 .gt-lobby .gt-btn {
   border-color: var(--line);
   background: var(--surface);
   color: var(--ink);
 }
-.gt-me .gt-btn:not(.primary):hover:not(:disabled),
+.gt-player .gt-btn:not(.primary):hover:not(:disabled),
 .gt-lobby .gt-btn:hover:not(:disabled) {
   background: var(--soft);
 }
@@ -366,16 +366,22 @@ kbd {
 /* Layout. The card width is the one size everything on the felt scales from: it is the
    largest that fits both the window's width and its height. */
 .gt-layout {
-  --side-w: 280px;
-  --card-w: clamp(56px, min((100vw - 900px) / 5.9, (100vh - 150px) / 4.5), 112px);
+  --side-w: 320px;
+  --card-w: clamp(56px, min((100vw - 940px) / 5.9, (100vh - 150px) / 4.5), 112px);
   display: grid;
   grid-template-columns: minmax(0, 1fr) var(--side-w);
   gap: var(--s-4);
   align-items: start;
 }
-/* The practice table, with the sidebar folded into a rail and your own area under the felt. */
+/* The practice table: the board on the left, every player in turn order on the right. The
+   board stays in view while a long players column scrolls. */
 .gt-page .gt-layout {
-  --card-w: clamp(60px, min((100vw - 620px) / 5.9, (100vh - 440px) / 4.2), 124px);
+  --side-w: 340px;
+  --card-w: clamp(60px, min((100vw - 690px) / 5.9, (100vh - 200px) / 4.2), 132px);
+}
+.gt-page .gt-play {
+  position: sticky;
+  top: 80px;
 }
 .gt-play {
   display: flex;
@@ -1195,7 +1201,32 @@ kbd {
   animation: gt-chip-in 0.3s var(--ease-spring);
 }
 
-/* Holdings: one column per color — owned cards above, tokens below. */
+/* Holdings: one column per color — owned cards above, tokens below. Opponents get a compact
+   single row: the card count tile, then the gem chip and how many are held. */
+.gt-holdings.sm {
+  grid-auto-columns: auto;
+  justify-content: space-between;
+}
+.gt-holdings.sm .gt-holding,
+.gt-holdings.sm .gt-holding .gt-token {
+  flex-direction: row;
+  gap: 2px;
+}
+.gt-holdings.sm .gt-bonus {
+  width: 19px;
+  height: 25px;
+  font-size: 12px;
+}
+.gt-holdings.sm .gt-bonus.placeholder {
+  display: none;
+}
+.gt-holdings.sm .gt-token.sm .gt-token-face {
+  width: 17px;
+  height: 17px;
+}
+.gt-holdings.sm .gt-token-count {
+  min-width: 9px;
+}
 .gt-holdings {
   display: grid;
   grid-auto-flow: column;
@@ -1406,71 +1437,7 @@ kbd {
   --seat-tone: var(--tone-3);
 }
 
-/* Your area: wider, warmer and always directly under the board. */
-.gt-me {
-  --hand-w: calc(var(--card-w) * 0.72);
-  position: relative;
-  background: linear-gradient(180deg, #fffaf0, var(--surface) 80px);
-  border: 1px solid #ebdcc0;
-  border-radius: var(--r-lg);
-  padding: var(--s-3) 18px 18px;
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-3);
-  box-shadow: var(--panel-shadow);
-  overflow: hidden;
-  transition:
-    box-shadow 0.4s var(--ease-out),
-    border-color 0.4s var(--ease-out);
-}
-.gt-me::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  height: 4px;
-  background: var(--seat-tone, var(--tone-0));
-}
-.gt-me.on-turn {
-  border-color: #e6cf8f;
-  box-shadow:
-    0 0 0 3px var(--glow-soft),
-    var(--panel-shadow);
-}
-.gt-me-head {
-  display: flex;
-  align-items: center;
-  gap: var(--s-3);
-}
-.gt-me-head .gt-avatar {
-  width: 38px;
-  height: 38px;
-}
-.gt-me-head .gt-race {
-  flex: 1 1 120px;
-  max-width: 240px;
-  margin-left: var(--s-3);
-}
-.gt-turn-chip {
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  padding: 6px 11px;
-  border-radius: 999px;
-  background: var(--soft);
-  color: var(--muted);
-  white-space: nowrap;
-  transition:
-    background 0.3s var(--ease-out),
-    color 0.3s var(--ease-out);
-}
-.gt-turn-chip.live {
-  background: var(--glow);
-  color: #2c2207;
-  box-shadow: 0 2px 10px rgba(224, 180, 60, 0.35);
-}
+/* Returning gems: an alert inside your panel, with the confirm button beside it. */
 .gt-me-alert {
   display: flex;
   flex-wrap: wrap;
@@ -1484,7 +1451,7 @@ kbd {
   animation: gt-status-in 0.35s var(--ease-out);
 }
 .gt-me-alert .gt-status-text {
-  flex: none;
+  flex: 1 1 100%;
 }
 .gt-me-alert-actions {
   display: inline-flex;
@@ -1496,44 +1463,42 @@ kbd {
   background: rgba(255, 255, 255, 0.08);
   color: inherit;
 }
-.gt-me-body {
-  display: grid;
-  grid-template-columns: minmax(280px, 1fr) auto;
-  gap: var(--s-5);
-  align-items: start;
-}
-.gt-me-block {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-3);
-  min-width: 0;
-}
-.gt-me-block.reserved {
-  padding-left: var(--s-5);
-  border-left: 1px solid var(--line);
-}
-.gt-me-block > .gt-holdings {
-  max-width: 440px;
-}
-.gt-hand-cards {
-  --card-w: var(--hand-w);
-  display: flex;
-  gap: 10px;
-}
-.gt-hand-cards .gt-card-cost {
-  gap: 2px;
-  padding: 6%;
-}
 
-/* Opponents */
+/* Players: every seat in turn order, the same panel for everyone. */
 .gt-side {
   display: flex;
   flex-direction: column;
   gap: 10px;
   min-width: 0;
 }
-.gt-side > .gt-label {
-  padding: var(--s-1) 2px 0;
+.gt-others {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+.gt-others > .gt-label {
+  padding: var(--s-2) 2px 0;
+}
+/* At the practice table the column never outgrows the window: your panel stays put and the
+   opponents scroll beneath it (only with 3–4 players), following whoever moves. */
+.gt-page .gt-side {
+  position: sticky;
+  top: 80px;
+  max-height: calc(100vh - 96px);
+}
+.gt-page .gt-side > .gt-player.mine {
+  flex: none;
+}
+.gt-page .gt-others {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  /* Room for the on-turn ring, which the scroll box would otherwise clip. */
+  padding: 0 4px 6px;
+  margin: 0 -4px;
 }
 .gt-player {
   position: relative;
@@ -1545,19 +1510,20 @@ kbd {
   flex-direction: column;
   gap: 10px;
   box-shadow: var(--panel-shadow);
-  overflow: hidden;
   transition:
     border-color 0.35s var(--ease-out),
     box-shadow 0.35s var(--ease-out),
-    transform 0.35s var(--ease-out);
+    transform 0.35s var(--ease-out),
+    background 0.35s var(--ease-out);
 }
 .gt-player::before {
   content: '';
   position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  height: 3px;
+  left: -1px;
+  right: -1px;
+  top: -1px;
+  height: 4px;
+  border-radius: var(--r-md) var(--r-md) 0 0;
   background: var(--seat-tone, var(--line));
 }
 .gt-player.on-turn {
@@ -1578,44 +1544,119 @@ kbd {
 .gt-player .gt-score {
   font-size: 26px;
 }
-.gt-player-reserved {
+/* Your own seat: same panel, warmer and a little larger. */
+.gt-player.mine {
+  background: linear-gradient(180deg, #fff8ea, var(--surface) 90px);
+  border-color: #ebdcc0;
+  padding: 16px 14px 14px;
+}
+.gt-player.mine .gt-avatar {
+  width: 36px;
+  height: 36px;
+}
+.gt-player.mine .gt-score {
+  font-size: 32px;
+}
+.gt-player.mine.on-turn {
+  border-color: #e6cf8f;
+  box-shadow:
+    0 0 0 3px var(--glow-soft),
+    var(--panel-shadow);
+}
+.gt-turn-chip {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: var(--soft);
+  color: var(--muted);
+  white-space: nowrap;
+  transition:
+    background 0.3s var(--ease-out),
+    color 0.3s var(--ease-out);
+}
+.gt-turn-chip.live {
+  background: var(--glow);
+  color: #2c2207;
+  box-shadow: 0 2px 10px rgba(224, 180, 60, 0.35);
+}
+.gt-reserved {
   display: flex;
-  gap: 6px;
-  --card-w: 46px;
-  padding-top: var(--s-2);
+  flex-direction: column;
+  gap: var(--s-2);
+  padding-top: 10px;
   border-top: 1px dashed var(--line);
 }
-.gt-player-reserved .gt-card-head {
+.gt-reserved-cards {
+  --card-w: 46px;
+  display: flex;
+  gap: 6px;
+}
+.gt-player:not(.mine) .gt-reserved-cards .gt-card-head {
   padding: 4px 5px;
 }
-.gt-player-reserved .gt-card-cost {
+.gt-player:not(.mine) .gt-reserved-cards .gt-card-cost {
   padding: 3px;
   gap: 1px;
 }
-.gt-player-reserved .gt-pip {
+.gt-player:not(.mine) .gt-reserved-cards .gt-pip {
   min-width: 11px;
   min-height: 11px;
   font-size: 8px;
   border-width: 1px;
 }
-.gt-player-reserved .gt-card-head strong {
+.gt-player:not(.mine) .gt-reserved-cards .gt-card-head strong {
   font-size: 13px;
 }
-.gt-player-reserved .gt-card.affordable::before {
-  display: none;
+/* Your reserved cards are big enough to read and to click. */
+.gt-player.mine .gt-reserved-cards {
+  --card-w: min(84px, calc((var(--side-w) - 60px) / 3));
+  gap: 10px;
+}
+.gt-player.mine .gt-reserved-cards .gt-card-cost {
+  gap: 2px;
+  padding: 6%;
+}
+.gt-player.mine .gt-reserved-cards .gt-back {
+  width: var(--card-w);
 }
 
-/* Log */
+/* Log: a drawer on the right, opened from the status bar. */
 .gt-log {
+  position: fixed;
+  z-index: 45;
+  top: 12px;
+  right: 12px;
+  bottom: 12px;
+  width: min(360px, calc(100vw - 24px));
+  display: flex;
+  flex-direction: column;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: var(--r-md);
-  padding: var(--s-3);
-  max-height: 340px;
-  overflow: auto;
-  margin-top: var(--s-1);
-  box-shadow: var(--panel-shadow);
-  scrollbar-width: thin;
+  border-radius: var(--r-lg);
+  padding: var(--s-3) var(--s-3) 0;
+  box-shadow: 0 24px 60px rgba(30, 22, 32, 0.28);
+  transform: translateX(calc(100% + 24px));
+  visibility: hidden;
+  transition:
+    transform 0.4s var(--ease-out),
+    visibility 0s linear 0.4s;
+}
+.gt-log.open {
+  transform: none;
+  visibility: visible;
+  transition:
+    transform 0.4s var(--ease-out),
+    visibility 0s;
+}
+.gt-log header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 2px 10px;
+  border-bottom: 1px solid var(--line);
 }
 .gt-log h3 {
   display: flex;
@@ -1626,15 +1667,25 @@ kbd {
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--muted);
-  margin-bottom: 10px;
+  margin: 0;
+}
+.gt-log .gt-pop-close {
+  background: var(--soft);
+  color: var(--muted);
+}
+.gt-log .gt-pop-close:hover {
+  background: var(--line);
+  color: var(--ink);
 }
 .gt-log ol {
   list-style: none;
   margin: 0;
-  padding: 0;
+  padding: 10px 0 var(--s-3);
   display: flex;
   flex-direction: column;
   gap: 3px;
+  overflow: auto;
+  scrollbar-width: thin;
 }
 .gt-log li {
   font-size: var(--t-sm);
@@ -1647,7 +1698,6 @@ kbd {
   align-items: center;
   gap: var(--s-1);
   animation: gt-log-in 0.4s var(--ease-out);
-  transition: background 0.4s var(--ease-out);
 }
 @keyframes gt-log-in {
   from {
@@ -1659,7 +1709,22 @@ kbd {
   background: var(--soft);
 }
 .gt-log .muted {
-  margin: 0;
+  margin: 12px 2px;
+}
+.gt-count {
+  min-width: 18px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.gt-btn.ghost.on {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.14);
 }
 .tone-border-0 {
   border-left-color: var(--tone-0) !important;
@@ -1786,13 +1851,38 @@ kbd {
   flex-wrap: wrap;
   align-items: center;
   gap: var(--s-1);
-  padding: 6px 10px;
+  min-height: 34px;
+  padding: 5px 10px;
   border-radius: var(--r-sm);
-  background: #fbf2d6;
-  border: 1px solid #ecd9a2;
   font-size: var(--t-sm);
   line-height: 1.4;
+}
+/* The move being played right now: bright, so every player sees it land. */
+.gt-move.live {
+  background: #fbf0cc;
+  border: 1px solid #e8cf86;
+  font-weight: 600;
   animation: gt-move-in 0.35s var(--ease-out);
+}
+/* Afterwards it stays on the panel, quieter, until the seat moves again. */
+.gt-move.last {
+  background: #f6f2ea;
+  border: 1px solid transparent;
+  color: #5d5458;
+}
+.gt-move-tag {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #a39889;
+  margin-right: 2px;
+}
+.gt-move-none {
+  color: var(--muted);
+}
+.gt-step-verb {
+  font-weight: 700;
 }
 @keyframes gt-move-in {
   from {
@@ -1800,8 +1890,7 @@ kbd {
     transform: translateY(-4px);
   }
 }
-.gt-player.acting,
-.gt-me.acting {
+.gt-player.acting {
   border-color: var(--gem-gold);
   box-shadow:
     0 0 0 3px var(--glow),
@@ -2178,34 +2267,54 @@ kbd {
   gap: var(--s-2);
 }
 
-/* Narrower windows: opponents and the log move under the table. */
+/* Narrower windows: the players move under the board, side by side. */
 @media (max-width: 1100px) {
   .gt-layout {
     grid-template-columns: minmax(0, 1fr);
     --card-w: clamp(56px, min((100vw - 520px) / 5.9, (100vh - 150px) / 4.5), 112px);
   }
   .gt-page .gt-layout {
-    --card-w: clamp(56px, min((100vw - 320px) / 5.9, (100vh - 440px) / 4.2), 120px);
+    --side-w: 320px;
+    --card-w: clamp(56px, min((100vw - 320px) / 5.9, (100vh - 200px) / 4.2), 124px);
+  }
+  .gt-page .gt-play {
+    position: static;
   }
   .gt-side {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    align-items: start;
   }
-  .gt-side > .gt-label,
-  .gt-log {
-    grid-column: 1 / -1;
+  .gt-page .gt-side {
+    position: static;
+    max-height: none;
+  }
+  .gt-others {
+    display: contents;
+  }
+  .gt-others > .gt-label {
+    display: none;
+  }
+  .gt-side > .gt-player.mine {
+    order: -2;
+  }
+  /* Reserved-card choices open above the card instead of off the left edge. */
+  .gt-side .gt-pop.left {
+    right: auto;
+    left: -6px;
+    top: auto;
+    bottom: calc(100% + 14px);
+    transform-origin: bottom left;
+  }
+  .gt-side .gt-pop.left::before {
+    top: auto;
+    right: auto;
+    bottom: -7px;
+    left: calc(var(--card-w) / 2);
+    transform: rotate(225deg);
   }
 }
 @media (max-width: 900px) {
-  .gt-me-body {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .gt-me-block.reserved {
-    padding-left: 0;
-    border-left: 0;
-    padding-top: var(--s-3);
-    border-top: 1px solid var(--line);
-  }
   .gt-status {
     flex-wrap: wrap;
   }
@@ -2305,18 +2414,6 @@ kbd {
     height: 28px;
     padding: 0 var(--s-2);
   }
-  .gt-me {
-    padding: var(--s-3);
-  }
-  .gt-me-head {
-    flex-wrap: wrap;
-  }
-  .gt-me-head .gt-race {
-    order: 5;
-    flex-basis: 100%;
-    max-width: none;
-    margin-left: 0;
-  }
   .gt-holdings.md .gt-holding-labels {
     display: none;
   }
@@ -2371,7 +2468,6 @@ kbd {
   .gt-card.affordable,
   .gt-noble.clickable,
   .gt-player.acting,
-  .gt-me.acting,
   .gt-token.available .gt-token-face,
   .gt-pop,
   .gt-dots::after,
